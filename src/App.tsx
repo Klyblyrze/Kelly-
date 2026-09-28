@@ -9,6 +9,8 @@ import {
   TaskProjectData,
   AiCoWorkData,
   GeminiSparkData,
+  SobrietyRecoveryContext,
+  DailyIntention,
 } from './types/journal';
 import { EMOTIONS_DATA, getEmotionPath } from './data/emotionsData';
 import {
@@ -26,6 +28,10 @@ import {
   saveStoredAiCoWork,
   loadStoredGeminiSpark,
   saveStoredGeminiSpark,
+  loadStoredSobriety,
+  saveStoredSobriety,
+  loadStoredDailyIntention,
+  saveStoredDailyIntention,
   SEED_MOOD_ENTRIES,
   INITIAL_WELLTORY_BIOMETRICS,
   INITIAL_MINDSARA_CONTEXT,
@@ -33,21 +39,33 @@ import {
   INITIAL_TASK_PROJECTS,
   INITIAL_AI_COWORK,
   INITIAL_GEMINI_SPARK,
+  INITIAL_SOBRIETY_RECOVERY,
 } from './data/seedData';
-import { Navbar } from './components/Navbar';
+import { Navbar, AppActiveView } from './components/Navbar';
+import { DashboardHomeView } from './components/DashboardHomeView';
+import { IntegrationsHubView } from './components/IntegrationsHubView';
+import { JournalLandingView } from './components/JournalLandingView';
 import { FeelingsWheel } from './components/FeelingsWheel';
 import { PromptSuggestions } from './components/PromptSuggestions';
 import { MoodHistoryView } from './components/MoodHistoryView';
 import { PatternInsightsView } from './components/PatternInsightsView';
 import { HolisticHealthProjectsView } from './components/HolisticHealthProjectsView';
 import { WeeklySentimentCard } from './components/WeeklySentimentCard';
+import { SobrietyTrackerCard } from './components/SobrietyTrackerCard';
+import { SobrietyRecoveryView } from './components/SobrietyRecoveryView';
+import { ActionSuggestionsSection } from './components/ActionSuggestionsSection';
+import { PersonalAnalysisView } from './components/PersonalAnalysisView';
+import { TriggerWarningModal } from './components/TriggerWarningModal';
 import { JournalEditorModal } from './components/JournalEditorModal';
+import { VoiceCallModal } from './components/VoiceCallModal';
 import { IntegrationsModal } from './components/IntegrationsModal';
 import { SomaticGroundingBar } from './components/SomaticGroundingBar';
+import { ClinicalPdfReportModal } from './components/ClinicalPdfReportModal';
+import { analyzeJournalSentimentAndTags } from './utils/sentimentTagger';
 import { CheckCircle2, Sparkles, Heart } from 'lucide-react';
 
 export default function App() {
-  // State for all 6 holistic streams
+  // State for all holistic streams & Sobriety Treatment overlay
   const [entries, setEntries] = useState<MoodEntry[]>(loadStoredEntries);
   const [welltory, setWelltory] = useState<WelltoryBiometrics>(loadStoredWelltory);
   const [mindsara, setMindsara] = useState<MindsaraContext>(loadStoredMindsara);
@@ -55,9 +73,20 @@ export default function App() {
   const [tasks, setTasks] = useState<TaskProjectData>(loadStoredTasks);
   const [aiCoWork, setAiCoWork] = useState<AiCoWorkData>(loadStoredAiCoWork);
   const [geminiSpark, setGeminiSpark] = useState<GeminiSparkData>(loadStoredGeminiSpark);
+  const [sobriety, setSobriety] = useState<SobrietyRecoveryContext>(loadStoredSobriety);
+  const [dailyIntention, setDailyIntention] = useState<DailyIntention>(loadStoredDailyIntention);
 
-  // Active view: 'wheel' | 'history' | 'patterns' | 'predictive' | 'holistic'
-  const [activeView, setActiveView] = useState<'wheel' | 'history' | 'patterns' | 'predictive' | 'holistic'>('wheel');
+  // Tabular navigation active view: defaults to 'dashboard' (Executive Homepage with dual tracker)
+  const [activeView, setActiveView] = useState<AppActiveView>('dashboard');
+  const [analysisSubTab, setAnalysisSubTab] = useState<'trends' | 'history' | 'personal' | 'holistic'>('trends');
+
+  // Trigger Warning Overlay & Somatic Grounding Force-Open State
+  const [triggerWarningOpen, setTriggerWarningOpen] = useState(false);
+  const [warningCravingLevel, setWarningCravingLevel] = useState(0);
+  const [warningHaltTriggers, setWarningHaltTriggers] = useState<string[]>([]);
+  const [forceGroundingOpen, setForceGroundingOpen] = useState(false);
+  const [isGlobalPdfReportOpen, setIsGlobalPdfReportOpen] = useState(false);
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
 
   const [selectedEmotion, setSelectedEmotion] = useState<EmotionSelection | null>(() => {
     const peacefulNode = EMOTIONS_DATA[0].children?.[0].children?.[0] || EMOTIONS_DATA[0];
@@ -119,6 +148,21 @@ export default function App() {
   const handleUpdateGeminiSpark = (newData: GeminiSparkData) => {
     setGeminiSpark(newData);
     saveStoredGeminiSpark(newData);
+  };
+
+  const handleUpdateDailyIntention = (updated: DailyIntention) => {
+    setDailyIntention(updated);
+    saveStoredDailyIntention(updated);
+  };
+
+  const handleToggleDailyIntentionComplete = () => {
+    const updated: DailyIntention = {
+      ...dailyIntention,
+      completed: !dailyIntention.completed,
+      completedAt: !dailyIntention.completed ? new Date().toISOString() : undefined,
+    };
+    handleUpdateDailyIntention(updated);
+    showToast(updated.completed ? '🎉 Daily intention achieved today!' : 'Daily intention reset to pending.');
   };
 
   // Restore sample data
@@ -228,11 +272,39 @@ export default function App() {
     setIsJournalModalOpen(true);
   };
 
+  const handleUpdateSobriety = (updated: SobrietyRecoveryContext) => {
+    setSobriety(updated);
+    saveStoredSobriety(updated);
+    showToast('Sobriety progress updated!');
+  };
+
   // Save new journal entry with physical and project snapshot
   const handleSaveEntry = async (entryData: Omit<MoodEntry, 'id'>) => {
+    // Run automated sentiment tagging analysis if not already populated
+    const sentimentResult =
+      entryData.sentimentAnalysis ||
+      analyzeJournalSentimentAndTags(
+        entryData.journalText,
+        entryData.primaryEmotion,
+        entryData.secondaryEmotion,
+        entryData.somaticSensations,
+        entryData.intensity,
+        entryData.tags
+      );
+
     const newEntry: MoodEntry = {
       ...entryData,
       id: `entry-${Date.now()}`,
+      tags:
+        entryData.tags && entryData.tags.length > 0 && entryData.sentimentAnalysis
+          ? entryData.tags
+          : (sentimentResult as any).allTags || entryData.tags,
+      sentimentAnalysis: {
+        valence: sentimentResult.valence,
+        score: sentimentResult.score,
+        emotionTags: sentimentResult.emotionTags,
+        themeTags: sentimentResult.themeTags,
+      },
       biometricsSnapshot: {
         ...entryData.biometricsSnapshot,
         sleepHours: samsungHealth.enabled ? samsungHealth.sleepHours : undefined,
@@ -248,7 +320,40 @@ export default function App() {
     };
     const updated = [newEntry, ...entries];
     handleUpdateEntries(updated);
-    showToast('Journal entry logged to your mood timeline!');
+
+    // High-risk addiction trigger & craving detection
+    const cravingLvl = newEntry.recoverySnapshot?.cravingLevel ?? 0;
+    const haltTrigs = newEntry.recoverySnapshot?.haltTriggers ?? [];
+    const lowerText = newEntry.journalText.toLowerCase();
+    const triggerWords = [
+      'craving',
+      'relapse',
+      'drink',
+      'alcohol',
+      'urge',
+      'trigger',
+      'wine',
+      'beer',
+      'whiskey',
+      'vodka',
+      'bar',
+      'cocktail',
+    ];
+    const hasTriggerWord = triggerWords.some((w) => lowerText.includes(w));
+
+    if (cravingLvl >= 5 || (cravingLvl >= 3 && hasTriggerWord) || haltTrigs.length >= 2) {
+      setWarningCravingLevel(cravingLvl || 5);
+      setWarningHaltTriggers(
+        haltTrigs.length > 0
+          ? haltTrigs
+          : hasTriggerWord
+          ? ['Craving Trigger Mentioned in Journal', 'Evening Transition Vulnerability']
+          : ['Elevated Stress Arousal']
+      );
+      setTriggerWarningOpen(true);
+    } else {
+      showToast('Journal entry logged to your mood timeline!');
+    }
   };
 
   // Delete journal entry
@@ -284,73 +389,262 @@ export default function App() {
           setIsJournalModalOpen(true);
         }}
         onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+        onOpenClinicalReport={() => setIsGlobalPdfReportOpen(true)}
         welltory={welltory}
         mindsara={mindsara}
         samsungHealth={samsungHealth}
         tasks={tasks}
+        sobriety={sobriety}
         totalEntriesCount={entries.length}
       />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* VIEW 1: FEELINGS WHEEL & PERSONALIZED PROMPTS */}
-        {activeView === 'wheel' && (
+        {/* TAB 1: EXECUTIVE DASHBOARD & DUAL-TRACKER (HOMEPAGE) */}
+        {activeView === 'dashboard' && (
+          <DashboardHomeView
+            entries={entries}
+            sobriety={sobriety}
+            onUpdateSobriety={handleUpdateSobriety}
+            welltory={welltory}
+            samsungHealth={samsungHealth}
+            tasks={tasks}
+            mindsara={mindsara}
+            onNavigateToView={(view) => setActiveView(view)}
+            onOpenCheckIn={(prompt) => {
+              setActiveJournalPrompt(prompt || '');
+              setIsJournalModalOpen(true);
+            }}
+            onOpenUrgeSurfing={() => setForceGroundingOpen(true)}
+            onOpenClinicalReport={() => setIsGlobalPdfReportOpen(true)}
+            onOpenIntegrations={() => setActiveView('integrations')}
+            dailyIntention={dailyIntention}
+            onSetDailyIntention={handleUpdateDailyIntention}
+            onToggleDailyIntentionComplete={handleToggleDailyIntentionComplete}
+          />
+        )}
+
+        {/* TAB 2: JOURNALING & FEELINGS WHEEL (LANDING PAGE WITH INTEGRATED ANALYSIS & TOOLS) */}
+        {(activeView === 'journal' || activeView === 'wheel') && (
+          <JournalLandingView
+            entries={entries}
+            selectedEmotion={selectedEmotion}
+            onSelectEmotion={handleSelectEmotion}
+            prompts={prompts}
+            isPromptsLoading={isPromptsLoading}
+            onRefreshPrompts={(customNote) => {
+              if (selectedEmotion) fetchPrompts(selectedEmotion, customNote);
+            }}
+            onSelectPromptForJournal={handleSelectPromptForJournal}
+            onOpenNewJournalEntry={(prompt) => {
+              setActiveJournalPrompt(prompt || '');
+              setIsJournalModalOpen(true);
+            }}
+            onOpenCallMode={() => setIsCallModalOpen(true)}
+            welltory={welltory}
+            mindsara={mindsara}
+            samsungHealth={samsungHealth}
+            tasks={tasks}
+            aiCoWork={aiCoWork}
+            geminiSpark={geminiSpark}
+            sobriety={sobriety}
+            dailyIntention={dailyIntention}
+            onToggleDailyIntentionComplete={handleToggleDailyIntentionComplete}
+            onOpenIntegrations={() => setActiveView('integrations')}
+          />
+        )}
+
+        {/* TAB 3: SOBRIETY & ADDICTION TREATMENT HUB */}
+        {(activeView === 'sobriety' || activeView === 'recovery') && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Weekly Sentiment Trend Summary Card with Recharts Sparkline */}
-            <WeeklySentimentCard
+            {/* Top Quick Gauge */}
+            <SobrietyTrackerCard
+              sobriety={sobriety}
+              onUpdateSobriety={handleUpdateSobriety}
+              onOpenRecoveryHub={() => {}}
+              onOpenUrgeSurfing={() => setForceGroundingOpen(true)}
+            />
+
+            <SobrietyRecoveryView
+              sobriety={sobriety}
+              onUpdateSobriety={handleUpdateSobriety}
               entries={entries}
-              onViewFullHistory={() => setActiveView('history')}
-              onNavigateToPredictive={() => setActiveView('predictive')}
-            />
-
-            {/* Feelings Wheel Section */}
-            <FeelingsWheel
-              selectedEmotion={selectedEmotion}
-              onSelectEmotion={handleSelectEmotion}
-              onQuickJournal={() => {
-                setActiveJournalPrompt(
-                  prompts[0]?.prompt || selectedEmotion?.node.defaultPrompts[0] || ''
-                );
-                setIsJournalModalOpen(true);
-              }}
-            />
-
-            {/* AI Prompt Suggestions Section */}
-            <PromptSuggestions
-              selectedEmotion={selectedEmotion}
-              prompts={prompts}
-              isLoading={isPromptsLoading}
-              onRefreshPrompts={(customNote) => {
-                if (selectedEmotion) fetchPrompts(selectedEmotion, customNote);
-              }}
-              onSelectPromptForJournal={handleSelectPromptForJournal}
               welltory={welltory}
-              mindsara={mindsara}
               samsungHealth={samsungHealth}
               tasks={tasks}
-              aiCoWork={aiCoWork}
-              geminiSpark={geminiSpark}
-              onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+              onOpenJournalWithPrompt={(promptText) => {
+                setActiveJournalPrompt(promptText);
+                setIsJournalModalOpen(true);
+              }}
+              onOpenIntegrations={() => setActiveView('integrations')}
             />
           </div>
         )}
 
-        {/* VIEW 2: MOOD HISTORY (WITH ADVANCED SEARCH & FILTERING BAR) */}
-        {activeView === 'history' && (
-          <div className="animate-in fade-in duration-300">
-            <MoodHistoryView
+        {/* TAB 4: DATA TRENDS & ANALYSIS */}
+        {(activeView === 'analysis' || activeView === 'patterns' || activeView === 'history' || activeView === 'holistic') && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Analysis Workspace Sub-Navigation */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold">
+                  Analysis Workspace
+                </span>
+                <span className="text-slate-600">·</span>
+                <span className="text-xs text-slate-300">
+                  Longitudinal correlations & clinical records
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+                <button
+                  onClick={() => setAnalysisSubTab('trends')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    analysisSubTab === 'trends'
+                      ? 'bg-slate-800 text-white font-semibold shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📊 Biometrics & Heatmaps
+                </button>
+                <button
+                  onClick={() => setAnalysisSubTab('history')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    analysisSubTab === 'history'
+                      ? 'bg-slate-800 text-white font-semibold shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📖 Mood History Feed ({entries.length})
+                </button>
+                <button
+                  onClick={() => setAnalysisSubTab('personal')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    analysisSubTab === 'personal'
+                      ? 'bg-purple-950 text-purple-200 font-semibold shadow-xs border border-purple-500/40'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  🧬 Personal Traits & Growth
+                </button>
+                <button
+                  onClick={() => setAnalysisSubTab('holistic')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    analysisSubTab === 'holistic'
+                      ? 'bg-slate-800 text-white font-semibold shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  🌐 Sensor Matrix
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-view A: Scatter, Correlations & Heatmaps */}
+            {analysisSubTab === 'trends' && (
+              <PatternInsightsView
+                entries={entries}
+                welltory={welltory}
+                mindsara={mindsara}
+                samsungHealth={samsungHealth}
+                tasks={tasks}
+                aiCoWork={aiCoWork}
+                geminiSpark={geminiSpark}
+                sobriety={sobriety}
+                initialTab="scatter"
+                onSelectPrompt={(promptText) => {
+                  setActiveJournalPrompt(promptText);
+                  setIsJournalModalOpen(true);
+                }}
+                onOpenIntegrations={() => setActiveView('integrations')}
+              />
+            )}
+
+            {/* Sub-view B: Mood History Feed with Automated Sentiment Tags & Context Actions */}
+            {analysisSubTab === 'history' && (
+              <div className="space-y-8">
+                <ActionSuggestionsSection
+                  entries={entries}
+                  welltory={welltory}
+                  samsungHealth={samsungHealth}
+                  tasks={tasks}
+                  sobriety={sobriety}
+                  mindsara={mindsara}
+                  onSelectPrompt={(promptText) => {
+                    setActiveJournalPrompt(promptText);
+                    setIsJournalModalOpen(true);
+                  }}
+                  onOpenUrgeSurfing={() => setForceGroundingOpen(true)}
+                />
+                <MoodHistoryView
+                  entries={entries}
+                  onDeleteEntry={handleDeleteEntry}
+                  onUpdateEntry={handleUpdateSingleEntry}
+                  onNavigateToWheel={() => setActiveView('journal')}
+                  onOpenIntegrations={() => setActiveView('integrations')}
+                  welltory={welltory}
+                  sobriety={sobriety}
+                />
+              </div>
+            )}
+
+            {/* Sub-view C: Personal Analysis & Personality Growth */}
+            {analysisSubTab === 'personal' && (
+              <PersonalAnalysisView
+                entries={entries}
+                welltory={welltory}
+                samsungHealth={samsungHealth}
+                tasks={tasks}
+                sobriety={sobriety}
+                onSelectPrompt={(promptText) => {
+                  setActiveJournalPrompt(promptText);
+                  setIsJournalModalOpen(true);
+                }}
+                onOpenIntegrations={() => setActiveView('integrations')}
+              />
+            )}
+
+            {/* Sub-view D: Holistic Sensor Matrix */}
+            {analysisSubTab === 'holistic' && (
+              <HolisticHealthProjectsView
+                entries={entries}
+                welltory={welltory}
+                mindsara={mindsara}
+                samsungHealth={samsungHealth}
+                tasks={tasks}
+                aiCoWork={aiCoWork}
+                geminiSpark={geminiSpark}
+                onOpenIntegrations={() => setActiveView('integrations')}
+                onJournalWithPrompt={(promptText) => {
+                  setActiveJournalPrompt(promptText);
+                  setIsJournalModalOpen(true);
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: PERSONAL ANALYSIS (DEDICATED PRIMARY VIEW) */}
+        {activeView === 'personal' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <PersonalAnalysisView
               entries={entries}
-              onDeleteEntry={handleDeleteEntry}
-              onUpdateEntry={handleUpdateSingleEntry}
-              onNavigateToWheel={() => setActiveView('wheel')}
-              onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+              welltory={welltory}
+              samsungHealth={samsungHealth}
+              tasks={tasks}
+              sobriety={sobriety}
+              onSelectPrompt={(promptText) => {
+                setActiveJournalPrompt(promptText);
+                setIsJournalModalOpen(true);
+              }}
+              onOpenIntegrations={() => setActiveView('integrations')}
             />
           </div>
         )}
 
-        {/* VIEW 3: PREDICTIVE FORECAST SUITE */}
-        {activeView === 'predictive' && (
-          <div className="animate-in fade-in duration-300">
+        {/* TAB 5: FORECAST & FORWARD LOOKING */}
+        {(activeView === 'forecast' || activeView === 'predictive') && (
+          <div className="space-y-6 animate-in fade-in duration-300">
             <PatternInsightsView
               entries={entries}
               welltory={welltory}
@@ -359,60 +653,54 @@ export default function App() {
               tasks={tasks}
               aiCoWork={aiCoWork}
               geminiSpark={geminiSpark}
+              sobriety={sobriety}
               initialTab="predictive"
               onSelectPrompt={(promptText) => {
                 setActiveJournalPrompt(promptText);
                 setIsJournalModalOpen(true);
               }}
-              onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+              onOpenIntegrations={() => setActiveView('integrations')}
             />
           </div>
         )}
 
-        {/* VIEW 4: PATTERN INSIGHTS & SCATTER PLOT */}
-        {activeView === 'patterns' && (
-          <div className="animate-in fade-in duration-300">
-            <PatternInsightsView
-              entries={entries}
-              welltory={welltory}
-              mindsara={mindsara}
-              samsungHealth={samsungHealth}
-              tasks={tasks}
-              aiCoWork={aiCoWork}
-              geminiSpark={geminiSpark}
-              initialTab="scatter"
-              onSelectPrompt={(promptText) => {
-                setActiveJournalPrompt(promptText);
-                setIsJournalModalOpen(true);
-              }}
-              onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
-            />
-          </div>
-        )}
-
-        {/* VIEW 4: HOLISTIC HEALTH & LIFE ACTIVITY MATRIX */}
-        {activeView === 'holistic' && (
-          <div className="animate-in fade-in duration-300">
-            <HolisticHealthProjectsView
-              entries={entries}
-              welltory={welltory}
-              mindsara={mindsara}
-              samsungHealth={samsungHealth}
-              tasks={tasks}
-              aiCoWork={aiCoWork}
-              geminiSpark={geminiSpark}
-              onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
-              onJournalWithPrompt={(promptText) => {
-                setActiveJournalPrompt(promptText);
-                setIsJournalModalOpen(true);
-              }}
-            />
-          </div>
+        {/* TAB 6: INTEGRATIONS & SYNC HUB */}
+        {activeView === 'integrations' && (
+          <IntegrationsHubView
+            welltory={welltory}
+            onUpdateWelltory={handleUpdateWelltory}
+            samsungHealth={samsungHealth}
+            onUpdateSamsungHealth={handleUpdateSamsungHealth}
+            tasks={tasks}
+            onUpdateTasks={handleUpdateTasks}
+            mindsara={mindsara}
+            onUpdateMindsara={handleUpdateMindsara}
+          />
         )}
       </main>
 
       {/* Somatic Breathing Reset Widget */}
-      <SomaticGroundingBar />
+      <SomaticGroundingBar
+        forceOpen={forceGroundingOpen}
+        initialMode="urge_surf"
+        onCloseBar={() => setForceGroundingOpen(false)}
+      />
+
+      {/* Clinical Craving & Trigger Warning Overlay */}
+      <TriggerWarningModal
+        isOpen={triggerWarningOpen}
+        cravingLevel={warningCravingLevel}
+        haltTriggers={warningHaltTriggers}
+        onLaunchUrgeSurf={() => {
+          setForceGroundingOpen(true);
+          setTriggerWarningOpen(false);
+        }}
+        onDismiss={() => setTriggerWarningOpen(false)}
+        onOpenRecoveryHub={() => {
+          setActiveView('recovery');
+          setTriggerWarningOpen(false);
+        }}
+      />
 
       {/* Journal Entry Writer Modal */}
       <JournalEditorModal
@@ -425,6 +713,32 @@ export default function App() {
         mindsara={mindsara}
         samsungHealth={samsungHealth}
         tasks={tasks}
+        sobriety={sobriety}
+        onOpenCallMode={() => {
+          setIsJournalModalOpen(false);
+          setIsCallModalOpen(true);
+        }}
+      />
+
+      {/* Voice Call Mode Modal (Interactive Voice Journaling & AI Companion) */}
+      <VoiceCallModal
+        isOpen={isCallModalOpen}
+        onClose={() => setIsCallModalOpen(false)}
+        selectedEmotion={selectedEmotion}
+        onFinalizeEntry={async (entryData) => {
+          await handleSaveEntry(entryData);
+          setIsCallModalOpen(false);
+          showToast('Voice journal reflection transcribed & saved!');
+        }}
+      />
+
+      {/* Clinical PDF Report Modal */}
+      <ClinicalPdfReportModal
+        isOpen={isGlobalPdfReportOpen}
+        onClose={() => setIsGlobalPdfReportOpen(false)}
+        entries={entries}
+        welltory={welltory}
+        sobriety={sobriety}
       />
 
       {/* Holistic Integrations Modal */}

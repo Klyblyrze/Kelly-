@@ -856,3 +856,280 @@ export async function reconcileMindseraDataService(payload: {
   };
 }
 
+export interface ProbingQuestion {
+  id: string;
+  question: string;
+  focusArea: string;
+  probingRationale: string;
+}
+
+export interface DeepenReflectionResult {
+  quickObservation: string;
+  questions: ProbingQuestion[];
+}
+
+export async function generateDeepenReflectionService(payload: {
+  journalText: string;
+  selectedEmotion?: string;
+  somaticSensations?: string[];
+  intensity?: number;
+}): Promise<DeepenReflectionResult> {
+  const text = payload.journalText?.trim() || '';
+  const emotion = payload.selectedEmotion || 'Present Emotional State';
+  const somatic = payload.somaticSensations?.join(', ') || 'General somatic awareness';
+  const intensity = payload.intensity || 5;
+
+  const result = await executeGeminiWithFallback<DeepenReflectionResult>(
+    'generateDeepenReflection',
+    async (model) => {
+      const prompt = `You are a perceptive, trauma-informed psychological coach and journaling mentor.
+The user is currently writing a reflection in their Feelings Wheel Journal.
+Current draft:
+"${text}"
+
+Identified Emotion: ${emotion} (Intensity ${intensity}/10)
+Somatic Sensations noted: ${somatic}
+
+Analyze their reflection and generate exactly 2 to 3 deep, probing questions to help the user uncover what lies beneath their initial reaction.
+Focus on:
+1. Somatic cues and autonomic nervous system state (what the body is holding).
+2. Hidden core assumptions, rules, or unexpressed needs.
+3. Constructive cognitive reframing or self-compassion.
+
+Respond ONLY with valid JSON matching this schema:
+{
+  "quickObservation": "1 sentence validating their emotional state and subtle theme",
+  "questions": [
+    {
+      "id": "q-1",
+      "question": "Probing, open-ended question that prompts introspection",
+      "focusArea": "e.g. Unmet Core Need or Somatic Release or Cognitive Assumption",
+      "probingRationale": "Brief explanation of why this question opens insight"
+    }
+  ]
+}`;
+
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const responseText = response.text?.trim() || '';
+      const parsed = JSON.parse(responseText);
+      if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+        return parsed as DeepenReflectionResult;
+      }
+      return null;
+    }
+  );
+
+  if (result) return result;
+
+  // Resilient fallback questions calibrated to the user's emotion
+  return {
+    quickObservation: `Your reflection touches on ${emotion.toLowerCase()}, highlighting the delicate tension between external pressures and internal self-protection.`,
+    questions: [
+      {
+        id: 'q-fallback-1',
+        question: `When you feel ${emotion.toLowerCase()} in your body (${somatic}), what is the quietest fear or unexpressed expectation beneath that feeling?`,
+        focusArea: 'Somatic & Underlying Vulnerability',
+        probingRationale: 'Directs attention from narrative thoughts down into somatic clues and baseline security.',
+      },
+      {
+        id: 'q-fallback-2',
+        question: `If this feeling could speak directly without having to be polite or productive, what boundary or relief would it ask for right now?`,
+        focusArea: 'Unmet Need & Boundary Agency',
+        probingRationale: 'Bypasses social conditioning to uncover immediate authentic needs.',
+      },
+      {
+        id: 'q-fallback-3',
+        question: `How might your wisest, most compassionate future self view this moment three months from now?`,
+        focusArea: 'Self-Compassionate Horizon',
+        probingRationale: 'Instigates psychological distance and breaks rumination cycles.',
+      },
+    ],
+  };
+}
+
+// ============================================================================
+// CALL MODE: LIVE INTERACTIVE VOICE JOURNALING & REFLECTION
+// ============================================================================
+
+export async function executeCallModeTurnService(payload: {
+  conversationHistory: Array<{ role: 'user' | 'assistant'; text: string }>;
+  latestSpokenText: string;
+  selectedEmotion?: string;
+  somaticSensations?: string[];
+}): Promise<{
+  assistantResponse: string;
+  detectedEmotion?: string;
+  somaticCues?: string[];
+  groundingTip?: string;
+}> {
+  const historyText = (payload.conversationHistory || [])
+    .slice(-6)
+    .map((msg) => `${msg.role === 'user' ? 'User' : 'AI Companion'}: "${msg.text}"`)
+    .join('\n');
+
+  const context = `
+Selected Base Emotion: ${payload.selectedEmotion || 'Exploratory'}
+Noted Somatic Sensations: ${payload.somaticSensations?.join(', ') || 'None specified'}
+Recent Spoken Dialogue:
+${historyText || '(Beginning of call)'}
+User just said into microphone:
+"${payload.latestSpokenText}"
+`;
+
+  const rawResponse = await executeGeminiWithFallback('executeCallModeTurn', (model) =>
+    ai.models.generateContent({
+      model,
+      contents: `You are an empathic, compassionate voice journaling companion and psychological mirror on a live voice call with the user.
+The user is speaking aloud into their microphone to process their emotions, thoughts, somatic feelings, or life dilemmas.
+
+${context}
+
+Instructions:
+1. Provide a natural, conversational response ("assistantResponse") formatted for audio speech (2 to 3 concise, warm, grounding sentences).
+2. Validate their emotional state with genuine human warmth.
+3. Mirror back the core emotion or tension you heard.
+4. Ask one gentle, perceptive open question to invite deeper reflection.
+5. Identify any "detectedEmotion" and any "somaticCues" evident in their spoken words.
+6. Provide a 1-sentence "groundingTip" (e.g. breath reset, jaw relaxation).
+
+Respond in JSON matching the schema.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            assistantResponse: {
+              type: Type.STRING,
+              description: 'Warm, 2-3 sentence conversational response designed to be read aloud via speech synthesis.',
+            },
+            detectedEmotion: { type: Type.STRING },
+            somaticCues: { type: Type.ARRAY, items: { type: Type.STRING } },
+            groundingTip: { type: Type.STRING },
+          },
+          required: ['assistantResponse', 'detectedEmotion'],
+        },
+      },
+    })
+  );
+
+  if (rawResponse?.text) {
+    try {
+      const parsed = JSON.parse(rawResponse.text.trim());
+      if (parsed.assistantResponse) return parsed;
+    } catch {}
+  }
+
+  return {
+    assistantResponse: `I hear how much you are carrying right now. When you speak those words, take a soft breath in—what does your body need most in this very second?`,
+    detectedEmotion: payload.selectedEmotion || 'Reflective',
+    somaticCues: payload.somaticSensations || ['Gentle breathing'],
+    groundingTip: 'Release tension in your shoulders and take an unhurried exhale.',
+  };
+}
+
+export async function finalizeCallModeSessionService(payload: {
+  transcript: Array<{ speaker: string; text: string }>;
+  selectedEmotion?: string;
+}): Promise<{
+  journalTitle: string;
+  primaryEmotion: string;
+  secondaryEmotion: string;
+  intensity: number;
+  somaticSensations: string[];
+  fullJournalText: string;
+  keyBreakthrough: string;
+  compassionateInsight: string;
+  recommendedNextMicroAction: string;
+}> {
+  const fullDialogue = (payload.transcript || [])
+    .map((t) => `${t.speaker}: ${t.text}`)
+    .join('\n\n');
+
+  const rawResponse = await executeGeminiWithFallback('finalizeCallModeSession', (model) =>
+    ai.models.generateContent({
+      model,
+      contents: `You are an expert therapeutic transcription synthesizer.
+The user just completed a live voice journaling call.
+Here is the transcribed spoken conversation:
+"""
+${fullDialogue}
+"""
+
+Task:
+Synthesize this spoken session into a structured, deeply resonant Feelings Wheel Journal entry.
+1. "journalTitle": A poetic, evocative 3-6 word title.
+2. "primaryEmotion": The best matching Feelings Wheel primary emotion (Joyful, Powerful, Peaceful, Sad, Mad, Scared).
+3. "secondaryEmotion": A granular secondary emotion (e.g. Hopeful, Vulnerable, Overwhelmed, Hurt, Frustrated, Grateful).
+4. "intensity": Number from 1 to 10.
+5. "somaticSensations": Array of physical sensations evident or discussed.
+6. "fullJournalText": A beautifully written first-person journal entry (3-4 coherent paragraphs) organizing their spoken reflections, realizations, and honest thoughts into a permanent journal entry.
+7. "keyBreakthrough": 1-sentence distillation of the core truth discovered.
+8. "compassionateInsight": 1-sentence psychological validation.
+9. "recommendedNextMicroAction": 1 small, gentle, immediate self-care step.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            journalTitle: { type: Type.STRING },
+            primaryEmotion: { type: Type.STRING },
+            secondaryEmotion: { type: Type.STRING },
+            intensity: { type: Type.NUMBER },
+            somaticSensations: { type: Type.ARRAY, items: { type: Type.STRING } },
+            fullJournalText: { type: Type.STRING },
+            keyBreakthrough: { type: Type.STRING },
+            compassionateInsight: { type: Type.STRING },
+            recommendedNextMicroAction: { type: Type.STRING },
+          },
+          required: [
+            'journalTitle',
+            'primaryEmotion',
+            'secondaryEmotion',
+            'intensity',
+            'somaticSensations',
+            'fullJournalText',
+            'keyBreakthrough',
+            'compassionateInsight',
+            'recommendedNextMicroAction',
+          ],
+        },
+      },
+    })
+  );
+
+  if (rawResponse?.text) {
+    try {
+      const parsed = JSON.parse(rawResponse.text.trim());
+      if (parsed.fullJournalText && parsed.journalTitle) return parsed;
+    } catch {}
+  }
+
+  // Grounded fallback
+  const userLines = (payload.transcript || [])
+    .filter((t) => t.speaker === 'You' || t.speaker === 'User')
+    .map((t) => t.text)
+    .join('\n\n');
+
+  return {
+    journalTitle: 'Spoken Reflection & Voice Insights',
+    primaryEmotion: payload.selectedEmotion || 'Peaceful',
+    secondaryEmotion: 'Reflective',
+    intensity: 6,
+    somaticSensations: ['Deep breath', 'Shoulders relaxed'],
+    fullJournalText: userLines || 'Transcribed spoken journal reflection captured in live Call Mode.',
+    keyBreakthrough: 'Giving spoken voice to internal thoughts creates immediate cognitive spaciousness.',
+    compassionateInsight: 'Your honest willingness to speak your truth anchors nervous system regulation.',
+    recommendedNextMicroAction: 'Drink a glass of water and rest your eyes from the screen for 5 minutes.',
+  };
+}
+
+
+

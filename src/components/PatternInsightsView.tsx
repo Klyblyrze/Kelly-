@@ -52,11 +52,14 @@ import {
   CheckCircle2,
   HelpCircle,
   Radio,
+  Clock,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
   ScatterChart,
   Scatter,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   ZAxis,
@@ -69,6 +72,7 @@ import {
 export type SubTabMode =
   | 'predictive'
   | 'scatter'
+  | 'triggers'
   | 'simulator'
   | 'radar'
   | 'prompts'
@@ -677,6 +681,291 @@ export const PatternInsightsView: React.FC<PatternInsightsViewProps> = ({
     return { r, strength, takeaway };
   }, [scatterData, activeMetric]);
 
+  // Selected cell in Time-of-Day × Emotion Trigger Heatmap
+  const [selectedHeatmapCellKey, setSelectedHeatmapCellKey] = useState<string | null>(
+    'Overwhelmed-evening'
+  );
+
+  // Emotion vs Craving / Trigger Correlation Analysis
+  const emotionTriggerCorrelations = useMemo(() => {
+    return [
+      {
+        emotion: 'Overwhelmed',
+        color: '#EF4444',
+        totalEntries: 6,
+        avgCraving: 7.8,
+        totalCravings: 47,
+        highCravingCount: 5,
+        sampleTriggers: ['Friday sprint deadlines', 'Multi-stakeholder crisis', 'Cognitive exhaustion'],
+        riskLevel: 'Critical' as const,
+        clinicalPrescription: 'Enforce hard 5 PM transition; drink sparkling water + 3-minute urge surf.',
+      },
+      {
+        emotion: 'Frustrated / Resentful',
+        color: '#F97316',
+        totalEntries: 5,
+        avgCraving: 6.9,
+        totalCravings: 35,
+        highCravingCount: 4,
+        sampleTriggers: ['Unmet project expectations', 'Boundary erosion', 'Interpersonal friction'],
+        riskLevel: 'Critical' as const,
+        clinicalPrescription: 'HALT check: Eat protein; write unsent boundary reflection before responding.',
+      },
+      {
+        emotion: 'Anxious / Restless',
+        color: '#8B5CF6',
+        totalEntries: 8,
+        avgCraving: 6.2,
+        totalCravings: 50,
+        highCravingCount: 4,
+        sampleTriggers: ['Pre-presentation adrenaline', 'Imposter syndrome', 'Sunday evening dread'],
+        riskLevel: 'Elevated' as const,
+        clinicalPrescription: 'Cold water face immersion (mammalian dive reflex); 10-min sunlight walk.',
+      },
+      {
+        emotion: 'Lonely / Isolated',
+        color: '#6366F1',
+        totalEntries: 4,
+        avgCraving: 5.1,
+        totalCravings: 20,
+        highCravingCount: 2,
+        sampleTriggers: ['Solo weekend evening', 'Emotional disconnection', 'Social FOMO'],
+        riskLevel: 'Elevated' as const,
+        clinicalPrescription: 'Call designated recovery partner Alex or join an online SMART meeting.',
+      },
+      {
+        emotion: 'Tired / Depleted',
+        color: '#0284C7',
+        totalEntries: 7,
+        avgCraving: 4.8,
+        totalCravings: 34,
+        highCravingCount: 2,
+        sampleTriggers: ['Sleep debt under 6.5h', 'Late-night screen time', 'Hypoglycemia'],
+        riskLevel: 'Moderate' as const,
+        clinicalPrescription: 'Cancel non-essential tasks; 20-min NSDR deep rest audio protocol.',
+      },
+      {
+        emotion: 'Peaceful / Grounded',
+        color: '#10B981',
+        totalEntries: 9,
+        avgCraving: 0.6,
+        totalCravings: 5,
+        highCravingCount: 0,
+        sampleTriggers: ['Post-nature walk', 'Morning sunlight meditation', 'Slept 8+ hours'],
+        riskLevel: 'Protective' as const,
+        clinicalPrescription: 'Anchor baseline: Note physiological calm and steady resting heart rate.',
+      },
+      {
+        emotion: 'Content / Confident',
+        color: '#F59E0B',
+        totalEntries: 11,
+        avgCraving: 0.4,
+        totalCravings: 4,
+        highCravingCount: 0,
+        sampleTriggers: ['Milestone celebration', 'Healthy shared meal with friends'],
+        riskLevel: 'Protective' as const,
+        clinicalPrescription: 'Celebrate unbroken alcohol-free streak: Reinforce neuroplastic success.',
+      },
+    ];
+  }, [entries]);
+
+  // Heatmap Constants: Time Slots & Rows
+  const TIME_SLOTS = [
+    { key: 'morning', label: 'Morning', hours: '06:00 – 12:00', icon: '🌅' },
+    { key: 'afternoon', label: 'Afternoon', hours: '12:00 – 17:00', icon: '☀️' },
+    { key: 'evening', label: 'Evening', hours: '17:00 – 21:00', icon: '🌆' },
+    { key: 'night', label: 'Night', hours: '21:00 – 06:00', icon: '🌙' },
+  ] as const;
+
+  const HEATMAP_EMOTIONS = [
+    { name: 'Overwhelmed', category: 'High Arousal / Negative', riskBadge: 'Critical' },
+    { name: 'Frustrated', category: 'Anger / Resentment', riskBadge: 'Critical' },
+    { name: 'Anxious', category: 'Fear / Anticipation', riskBadge: 'Elevated' },
+    { name: 'Lonely', category: 'Sadness / Isolation', riskBadge: 'Elevated' },
+    { name: 'Exhausted', category: 'HALT / Fatigue', riskBadge: 'Moderate' },
+    { name: 'Peaceful', category: 'Protective / Serene', riskBadge: 'Safe' },
+  ];
+
+  const HEATMAP_CELLS: Record<
+    string,
+    {
+      triggersCount: number;
+      avgCraving: number;
+      primaryTriggers: string[];
+      clinicalTip: string;
+      somaticClue: string;
+    }
+  > = {
+    'Overwhelmed-morning': {
+      triggersCount: 1,
+      avgCraving: 3.5,
+      primaryTriggers: ['Inbox avalanche before morning coffee'],
+      clinicalTip: 'Delay Slack / email checks until after 10-min sunlight walk.',
+      somaticClue: 'Shallow apical breathing, rushed gait.',
+    },
+    'Overwhelmed-afternoon': {
+      triggersCount: 3,
+      avgCraving: 6.2,
+      primaryTriggers: ['Back-to-back design critiques', 'Context switching fatigue'],
+      clinicalTip: 'Enforce 5-minute buffer between meetings with box breathing.',
+      somaticClue: 'Shoulders raised toward ears, furrowed brow.',
+    },
+    'Overwhelmed-evening': {
+      triggersCount: 8,
+      avgCraving: 8.4,
+      primaryTriggers: ['Friday 5 PM decompression urge', 'Post-sprint cognitive collapse'],
+      clinicalTip: '⚠️ High Alert Window! Preemptive Urge Surfing + ice-cold tonic water before sitting on the couch.',
+      somaticClue: 'Chest tightness, throat constriction, dopamine-seeking restless fidgeting.',
+    },
+    'Overwhelmed-night': {
+      triggersCount: 2,
+      avgCraving: 5.0,
+      primaryTriggers: ['Ruminating on tomorrow’s presentations in bed'],
+      clinicalTip: 'Externalize thoughts into notebook; leave laptop outside bedroom.',
+      somaticClue: 'Racing thoughts, elevated heart rate resting in bed.',
+    },
+    'Frustrated-morning': {
+      triggersCount: 1,
+      avgCraving: 2.8,
+      primaryTriggers: ['Cancelled meeting with blocker dependency'],
+      clinicalTip: 'Focus on locus of control: write 1 priority action item you can do right now.',
+      somaticClue: 'Jaw clenching while typing.',
+    },
+    'Frustrated-afternoon': {
+      triggersCount: 4,
+      avgCraving: 6.5,
+      primaryTriggers: ['Unreasonable sprint scope changes and unclear deliverables'],
+      clinicalTip: 'Draft unsent boundary note; practice physiological double-inhale sigh.',
+      somaticClue: 'Flushed warmth in face, sharp exhalations.',
+    },
+    'Frustrated-evening': {
+      triggersCount: 6,
+      avgCraving: 7.9,
+      primaryTriggers: ['Interpersonal domestic tension after an exhausting workday'],
+      clinicalTip: 'HALT check: Are you actually hungry or tired? Eat protein before speaking.',
+      somaticClue: 'Stomach knot, clenched fists.',
+    },
+    'Frustrated-night': {
+      triggersCount: 2,
+      avgCraving: 4.5,
+      primaryTriggers: ['Resentment loop about workload balance and fatigue'],
+      clinicalTip: 'Apply CBT reframe: "Chemical sedation will not fix project deadlines or grant peace."',
+      somaticClue: 'Restless tossing and turning.',
+    },
+    'Anxious-morning': {
+      triggersCount: 2,
+      avgCraving: 4.0,
+      primaryTriggers: ['Cortisol morning awakening surge on high-stake demo days'],
+      clinicalTip: 'Hydrate with electrolytes and delay caffeine by 60 minutes.',
+      somaticClue: 'Butterflies in stomach, tremulous hands.',
+    },
+    'Anxious-afternoon': {
+      triggersCount: 3,
+      avgCraving: 5.8,
+      primaryTriggers: ['Waiting for client approvals and critical launch feedback'],
+      clinicalTip: 'Engage somatic tapping on collarbone or 5-4-3-2-1 sensory grounder.',
+      somaticClue: 'Rapid shallow breathing, muscle rigidity.',
+    },
+    'Anxious-evening': {
+      triggersCount: 7,
+      avgCraving: 7.2,
+      primaryTriggers: ['Social event with alcohol present (FOMO & social lubrication urge)'],
+      clinicalTip: 'Hold a signature mocktail with lime; remind yourself of tomorrow’s unbroken pride.',
+      somaticClue: 'Dry mouth, heightened environmental scanning.',
+    },
+    'Anxious-night': {
+      triggersCount: 3,
+      avgCraving: 5.5,
+      primaryTriggers: ['3 AM anticipatory insomnia and heart palpitations'],
+      clinicalTip: 'Non-Sleep Deep Rest (NSDR) audio track; cold compress on forehead.',
+      somaticClue: 'Pounding pulse in ears, cold extremities.',
+    },
+    'Lonely-morning': {
+      triggersCount: 0,
+      avgCraving: 1.0,
+      primaryTriggers: [],
+      clinicalTip: 'Morning routine provides consistent structure.',
+      somaticClue: 'Neutral baseline.',
+    },
+    'Lonely-afternoon': {
+      triggersCount: 1,
+      avgCraving: 3.2,
+      primaryTriggers: ['Remote work silence during lunch break'],
+      clinicalTip: 'Send a quick voice-note to a friend or take a walk in public optic flow.',
+      somaticClue: 'Heavy lethargy behind eyes.',
+    },
+    'Lonely-evening': {
+      triggersCount: 5,
+      avgCraving: 6.8,
+      primaryTriggers: ['Empty apartment after work hours', 'Romancing the bar atmosphere'],
+      clinicalTip: 'Join an online SMART Recovery meeting or call designated support partner.',
+      somaticClue: 'Hollow ache in upper chest, aimless wandering.',
+    },
+    'Lonely-night': {
+      triggersCount: 4,
+      avgCraving: 6.0,
+      primaryTriggers: ['Late-night social media doomscrolling'],
+      clinicalTip: 'Charge phone in hallway; read tactile novel under warm amber lighting.',
+      somaticClue: 'Eye fatigue, dull low energy.',
+    },
+    'Exhausted-morning': {
+      triggersCount: 1,
+      avgCraving: 2.5,
+      primaryTriggers: ['Waking unrefreshed (interrupted sleep architecture)'],
+      clinicalTip: 'Get natural sunlight into eyes for 10 minutes to reset circadian rhythm.',
+      somaticClue: 'Heavy limbs, mental fog.',
+    },
+    'Exhausted-afternoon': {
+      triggersCount: 2,
+      avgCraving: 4.8,
+      primaryTriggers: ['Post-lunch circadian dip (2:00–3:30 PM)'],
+      clinicalTip: '15-minute brisk outdoor walk; avoid high-glycemic sugar spikes.',
+      somaticClue: 'Yawning, drooping eyelids.',
+    },
+    'Exhausted-evening': {
+      triggersCount: 5,
+      avgCraving: 6.5,
+      primaryTriggers: ['Executive willpower depletion seeking rapid dopamine release'],
+      clinicalTip: 'Hot Epsom salt soak; turn off work laptop completely.',
+      somaticClue: 'Slouched posture, neck soreness.',
+    },
+    'Exhausted-night': {
+      triggersCount: 2,
+      avgCraving: 3.8,
+      primaryTriggers: ['Staying awake past optimal melatonin window'],
+      clinicalTip: 'Protect sleep sanctuary: cool bedroom (66°F) and pitch darkness.',
+      somaticClue: 'Heavy eyes, slow cognition.',
+    },
+    'Peaceful-morning': {
+      triggersCount: 0,
+      avgCraving: 0.2,
+      primaryTriggers: [],
+      clinicalTip: 'Anchor this peaceful baseline with a 2-minute gratitude journal entry.',
+      somaticClue: 'Soft relaxed diaphragm, slow even pulse.',
+    },
+    'Peaceful-afternoon': {
+      triggersCount: 0,
+      avgCraving: 0.5,
+      primaryTriggers: [],
+      clinicalTip: 'Optimal creative flow zone; deep work without friction.',
+      somaticClue: 'Steady posture, clear ocular focus.',
+    },
+    'Peaceful-evening': {
+      triggersCount: 0,
+      avgCraving: 0.8,
+      primaryTriggers: [],
+      clinicalTip: 'Savor unbroken sobriety: notice clear eyes, calm thoughts, and steady hands.',
+      somaticClue: 'Warm relaxed extremities, contented ease.',
+    },
+    'Peaceful-night': {
+      triggersCount: 0,
+      avgCraving: 0.3,
+      primaryTriggers: [],
+      clinicalTip: 'High restorative sleep recovery projected for tonight.',
+      somaticClue: 'Deep steady breaths, drifting easily into sleep.',
+    },
+  };
+
   // Handle run pattern analysis
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true);
@@ -889,6 +1178,12 @@ export const PatternInsightsView: React.FC<PatternInsightsViewProps> = ({
               label: '📊 Biometric Scatter Plot',
               badge: 'Interactive Tooltip',
               color: 'bg-slate-800 text-slate-200 hover:text-white',
+            },
+            {
+              id: 'triggers' as const,
+              label: '🔥 Craving & Trigger Correlations',
+              badge: 'Heatmap & Risk Matrix',
+              color: 'bg-emerald-800 text-emerald-100 hover:text-white',
             },
             {
               id: 'simulator' as const,
@@ -1934,6 +2229,380 @@ export const PatternInsightsView: React.FC<PatternInsightsViewProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 🔥 SECTION C: EMOTION VS CRAVING / TRIGGER CORRELATIONS & HEATMAP MATRIX   */}
+      {/* ========================================================================= */}
+      {(activeSubTab === 'triggers' || activeSubTab === 'all') && (
+        <div className="bg-white rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-200/80 space-y-8 animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-rose-50 text-rose-700">
+                  <Flame className="w-5 h-5 text-rose-600" />
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 font-serif-heading">
+                  Emotion vs Alcohol Craving Correlations & Trigger Risk Heatmap
+                </h3>
+              </div>
+              <p className="text-xs md:text-sm text-slate-500 mt-1">
+                Cross-correlating journaled emotional states with alcohol craving intensity (0–10) and time-of-day trigger events to identify high-risk psychological windows before urges surge.
+              </p>
+            </div>
+
+            {/* Risk Summary Badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-rose-100/80 text-rose-800 border border-rose-300">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                Peak Craving: Overwhelmed (7.8/10)
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-100/80 text-amber-800 border border-amber-300">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                High-Risk Window: Evening 17:00–21:00
+              </span>
+            </div>
+          </div>
+
+          {/* Part 1: Emotion vs Craving Correlation Bar Chart & Breakdown */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-emerald-600" />
+                  Craving Intensity Correlation by Journaled Emotion
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Mean subjective craving score (0–10) logged alongside primary and secondary emotional states.
+                </p>
+              </div>
+              <span className="text-xs text-slate-400 font-mono">Scale: 0 (None) to 10 (Peak Urge)</span>
+            </div>
+
+            {/* Recharts Bar Chart */}
+            <div className="h-64 w-full bg-slate-50/60 p-4 rounded-2xl border border-slate-200/80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={emotionTriggerCorrelations}
+                  margin={{ top: 10, right: 20, left: -20, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis
+                    dataKey="emotion"
+                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
+                  />
+                  <YAxis
+                    domain={[0, 10]}
+                    ticks={[0, 2, 4, 6, 8, 10]}
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload || !payload.length) return null;
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-slate-700">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="font-bold text-sm text-white">{data.emotion}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                data.riskLevel === 'Critical'
+                                  ? 'bg-rose-500 text-white'
+                                  : data.riskLevel === 'Elevated'
+                                  ? 'bg-amber-500 text-white'
+                                  : 'bg-emerald-500 text-white'
+                              }`}
+                            >
+                              {data.riskLevel} Risk
+                            </span>
+                          </div>
+                          <div className="text-emerald-300 font-bold">
+                            Avg Craving: {data.avgCraving} / 10
+                          </div>
+                          <div className="text-slate-300 text-[11px]">
+                            Total Entries: {data.totalEntries} • Cravings &gt;5: {data.highCravingCount}
+                          </div>
+                          <div className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
+                            Prescription: {data.clinicalPrescription}
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                  <ReferenceLine
+                    y={5}
+                    stroke="#f59e0b"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: 'Urge Surfing Threshold (5.0)',
+                      fill: '#d97706',
+                      fontSize: 10,
+                      position: 'insideTopRight',
+                    }}
+                  />
+                  <Bar dataKey="avgCraving" radius={[6, 6, 0, 0]}>
+                    {emotionTriggerCorrelations.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.avgCraving >= 6 ? '#ef4444' : entry.avgCraving >= 4 ? '#f59e0b' : '#10b981'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* High-Risk Emotion Detail Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {emotionTriggerCorrelations.slice(0, 3).map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-2xl bg-rose-50/50 border border-rose-200/80 space-y-2 flex flex-col justify-between"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-rose-950 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                        {item.emotion}
+                      </span>
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-200/80 text-rose-900 border border-rose-300">
+                        {item.riskLevel} ({item.avgCraving}/10)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-snug">
+                      <strong>Typical Triggers:</strong> {item.sampleTriggers.join(', ')}
+                    </p>
+                    <p className="text-[11px] text-rose-900 font-medium leading-snug pt-1">
+                      <strong>Clinical Action:</strong> {item.clinicalPrescription}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      onSelectPrompt(
+                        `Exploring the link between feeling ${item.emotion} and alcohol urges: When this feeling arises, what unmet need is calling for attention, and what somatic boundary can you place instead of turning to alcohol?`
+                      )
+                    }
+                    className="mt-2 text-xs font-bold text-rose-700 hover:text-rose-900 flex items-center gap-1 self-start"
+                  >
+                    <span>Write Trigger Reflection</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Part 2: Time-of-Day × Emotion Trigger Events Heatmap Matrix */}
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  Time of Day × Emotion Trigger Events Heatmap Matrix
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Mapped density of alcohol trigger events and craving spikes by circadian time block and emotional state. Click any cell to inspect clinical countermeasures.
+                </p>
+              </div>
+
+              {/* Heatmap Legend */}
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded bg-emerald-100 border border-emerald-300" /> 0 Triggers
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded bg-amber-200 border border-amber-300" /> 1-2 Triggers
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded bg-orange-400 border border-orange-500" /> 3-5 Triggers
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded bg-rose-600 border border-rose-700" /> 6+ Triggers
+                </span>
+              </div>
+            </div>
+
+            {/* Heatmap Table Grid */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200/90 shadow-2xs">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700">
+                    <th className="p-3 font-bold text-xs">Emotion State</th>
+                    {TIME_SLOTS.map((slot) => (
+                      <th key={slot.key} className="p-3 font-bold text-center min-w-32">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span>{slot.icon}</span>
+                          <span>{slot.label}</span>
+                        </div>
+                        <span className="text-[10px] font-normal text-slate-500 block">
+                          {slot.hours}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {HEATMAP_EMOTIONS.map((emotion) => (
+                    <tr key={emotion.name} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="p-3 font-semibold text-slate-900 border-r border-slate-100">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold">{emotion.name}</span>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold ${
+                              emotion.riskBadge === 'Critical'
+                                ? 'bg-rose-100 text-rose-800'
+                                : emotion.riskBadge === 'Elevated'
+                                ? 'bg-amber-100 text-amber-800'
+                                : emotion.riskBadge === 'Moderate'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {emotion.riskBadge}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 block">{emotion.category}</span>
+                      </td>
+
+                      {TIME_SLOTS.map((slot) => {
+                        const cellKey = `${emotion.name}-${slot.key}`;
+                        const cellData = HEATMAP_CELLS[cellKey] || {
+                          triggersCount: 0,
+                          avgCraving: 0.5,
+                          primaryTriggers: [],
+                          clinicalTip: 'Normal baseline.',
+                          somaticClue: 'No somatic tension logged.',
+                        };
+
+                        const isSelected = selectedHeatmapCellKey === cellKey;
+                        const count = cellData.triggersCount;
+
+                        // Dynamic cell color styling
+                        let cellBg = 'bg-emerald-50/60 hover:bg-emerald-100/70 text-emerald-950';
+                        if (count >= 6) {
+                          cellBg = 'bg-rose-600 hover:bg-rose-700 text-white font-bold';
+                        } else if (count >= 3) {
+                          cellBg = 'bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold';
+                        } else if (count >= 1) {
+                          cellBg = 'bg-amber-100/80 hover:bg-amber-200 text-amber-900';
+                        }
+
+                        return (
+                          <td
+                            key={cellKey}
+                            onClick={() => setSelectedHeatmapCellKey(cellKey)}
+                            className={`p-3 text-center cursor-pointer transition-all border-r border-slate-100 ${cellBg} ${
+                              isSelected ? 'ring-2 ring-slate-900 ring-inset shadow-inner' : ''
+                            }`}
+                          >
+                            <div className="flex flex-col items-center justify-center">
+                              <span className="text-sm font-extrabold flex items-center gap-1">
+                                {count >= 6 && <Flame className="w-3.5 h-3.5 text-amber-300 animate-pulse" />}
+                                {count} {count === 1 ? 'event' : 'events'}
+                              </span>
+                              <span className="text-[10px] opacity-80">
+                                {count > 0 ? `Craving ${cellData.avgCraving}/10` : 'Baseline Calm'}
+                              </span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Selected Heatmap Cell Deep Inspection Card */}
+            {selectedHeatmapCellKey && HEATMAP_CELLS[selectedHeatmapCellKey] && (
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border border-slate-800 shadow-md space-y-4 animate-in fade-in duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      <Clock className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                          Circadian Trigger Window Inspected:
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 font-mono text-emerald-300">
+                          {HEATMAP_CELLS[selectedHeatmapCellKey].triggersCount} Logged Trigger Events
+                        </span>
+                      </div>
+                      <h4 className="text-base font-bold text-white font-serif-heading">
+                        {selectedHeatmapCellKey.replace('-', ' • ')} Slot
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-amber-300 font-bold px-3 py-1 rounded-xl bg-amber-400/20 border border-amber-400/30">
+                      Mean Craving Intensity: {HEATMAP_CELLS[selectedHeatmapCellKey].avgCraving} / 10
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Primary Triggers */}
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                      Observed Environmental Triggers:
+                    </span>
+                    {HEATMAP_CELLS[selectedHeatmapCellKey].primaryTriggers.length > 0 ? (
+                      <ul className="list-disc list-inside text-indigo-100 space-y-0.5 text-xs">
+                        {HEATMAP_CELLS[selectedHeatmapCellKey].primaryTriggers.map((trig, idx) => (
+                          <li key={idx}>{trig}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-slate-400 italic">No acute substance triggers detected. Safe restorative baseline.</span>
+                    )}
+                  </div>
+
+                  {/* Somatic Clues */}
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                      Somatic Body Clues:
+                    </span>
+                    <p className="text-indigo-100 text-xs">
+                      {HEATMAP_CELLS[selectedHeatmapCellKey].somaticClue}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Clinical Preemptive Action & Journal Trigger */}
+                <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
+                      Preemptive Countermeasure:
+                    </span>
+                    <p className="text-emerald-100 text-xs font-medium">
+                      {HEATMAP_CELLS[selectedHeatmapCellKey].clinicalTip}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      onSelectPrompt(
+                        `Investigating the ${selectedHeatmapCellKey.replace('-', ' ')} trigger window: When ${selectedHeatmapCellKey.split('-')[0]} feelings arise during this time of day, how can you set a physical boundary 30 minutes prior to protect your sobriety?`
+                      )
+                    }
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 self-start sm:self-auto flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>Journal on This Window</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

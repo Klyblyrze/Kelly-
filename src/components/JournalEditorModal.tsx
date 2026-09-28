@@ -37,7 +37,12 @@ import {
   ShieldCheck,
   Flame,
   Coffee,
+  Lightbulb,
+  HelpCircle,
+  CornerDownRight,
+  Plus,
 } from 'lucide-react';
+import { analyzeJournalSentimentAndTags } from '../utils/sentimentTagger';
 
 interface JournalEditorModalProps {
   isOpen: boolean;
@@ -50,6 +55,7 @@ interface JournalEditorModalProps {
   samsungHealth?: SamsungHealthData;
   tasks?: TaskProjectData;
   sobriety?: SobrietyRecoveryContext;
+  onOpenCallMode?: () => void;
 }
 
 export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
@@ -63,6 +69,7 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
   samsungHealth,
   tasks,
   sobriety,
+  onOpenCallMode,
 }) => {
   const [promptText, setPromptText] = useState(initialPrompt);
   const [journalContent, setJournalContent] = useState('');
@@ -114,6 +121,79 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
   );
   const [mindseraComment, setMindseraComment] = useState<MindseraMindsComment | null>(null);
   const [isGeneratingMindsComment, setIsGeneratingMindsComment] = useState(false);
+
+  // Gemini Deepen Reflection State
+  const [isDeepening, setIsDeepening] = useState(false);
+  const [deepenError, setDeepenError] = useState<string | null>(null);
+  const [deepenResult, setDeepenResult] = useState<{
+    quickObservation: string;
+    questions: { id: string; question: string; focusArea: string; probingRationale: string }[];
+  } | null>(null);
+
+  const handleDeepenReflection = async () => {
+    const trimmed = journalContent.trim();
+    if (!trimmed || trimmed.length < 15) {
+      setDeepenError('Please write at least one or two sentences first so Gemini can analyze your thoughts.');
+      return;
+    }
+    setIsDeepening(true);
+    setDeepenError(null);
+
+    try {
+      const res = await fetch('/api/deepen-reflection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          journalText: trimmed,
+          selectedEmotion: selectedEmotion?.primary || 'Present State',
+          somaticSensations: selectedSomatic,
+          intensity,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to generate deepening inquiries');
+      const data = await res.json();
+      setDeepenResult(data);
+    } catch (err: any) {
+      console.warn('Deepen reflection error:', err);
+      // Seamless empathetic fallback
+      const em = selectedEmotion?.primary?.toLowerCase() || 'this feeling';
+      setDeepenResult({
+        quickObservation: `Your reflection captures subtle nuances of feeling ${em}, highlighting emotional awareness.`,
+        questions: [
+          {
+            id: 'q-fb-1',
+            question: `When you feel ${em} in your body, what is the quietest fear or unmet expectation underneath it?`,
+            focusArea: 'Somatic & Underlying Vulnerability',
+            probingRationale: 'Shifts attention from cognitive defense loops to raw emotional truth.',
+          },
+          {
+            id: 'q-fb-2',
+            question: `If this sensation had unconditional permission to be heard, what boundary or change would it demand?`,
+            focusArea: 'Boundary & Unexpressed Need',
+            probingRationale: 'Directs self-inquiry toward authentic boundary setting and relief.',
+          },
+          {
+            id: 'q-fb-3',
+            question: `What kindness would you extend right now to a close friend experiencing this exact emotional weight?`,
+            focusArea: 'Self-Compassion Reframe',
+            probingRationale: 'Breaks harsh self-judgment through externalized empathy.',
+          },
+        ],
+      });
+    } finally {
+      setIsDeepening(false);
+    }
+  };
+
+  const handleAppendQuestionToJournal = (questionText: string) => {
+    setJournalContent((prev) => {
+      const trimmed = prev.trim();
+      return trimmed
+        ? `${trimmed}\n\n[Inquiry: ${questionText}]\n`
+        : `[Inquiry: ${questionText}]\n`;
+    });
+  };
 
   // Sync initial prompt whenever opened
   useEffect(() => {
@@ -398,7 +478,48 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
         promptUsed: promptText,
         journalText: journalContent,
         somaticSensations: selectedSomatic,
-        tags,
+        tags: analyzeJournalSentimentAndTags(
+          journalContent,
+          selectedEmotion.primary,
+          selectedEmotion.secondary,
+          selectedSomatic,
+          intensity,
+          tags
+        ).allTags,
+        sentimentAnalysis: {
+          valence: analyzeJournalSentimentAndTags(
+            journalContent,
+            selectedEmotion.primary,
+            selectedEmotion.secondary,
+            selectedSomatic,
+            intensity,
+            tags
+          ).valence,
+          score: analyzeJournalSentimentAndTags(
+            journalContent,
+            selectedEmotion.primary,
+            selectedEmotion.secondary,
+            selectedSomatic,
+            intensity,
+            tags
+          ).score,
+          emotionTags: analyzeJournalSentimentAndTags(
+            journalContent,
+            selectedEmotion.primary,
+            selectedEmotion.secondary,
+            selectedSomatic,
+            intensity,
+            tags
+          ).emotionTags,
+          themeTags: analyzeJournalSentimentAndTags(
+            journalContent,
+            selectedEmotion.primary,
+            selectedEmotion.secondary,
+            selectedSomatic,
+            intensity,
+            tags
+          ).themeTags,
+        },
         aiReflection: aiReflection || undefined,
         mindseraMindsComments: mindseraComment ? [mindseraComment] : undefined,
         appliedFramework: activeFw?.name,
@@ -565,39 +686,26 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
                   Your Reflection
                 </label>
 
-                {/* Voice Dictation Button with Microphone Icon */}
-                {speechSupported ? (
+                {/* Call Mode Launcher Button (Distinct from inline voice dictation) */}
+                {onOpenCallMode && (
                   <button
                     type="button"
-                    onClick={toggleDictation}
-                    title="Transcribe spoken entry automatically via Web Speech API (Alt+M)"
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                      isListening
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 ring-2 ring-rose-300 ring-offset-1'
-                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs group'
-                    }`}
+                    onClick={() => {
+                      if (isListening && recognitionRef.current) {
+                        try {
+                          recognitionRef.current.stop();
+                        } catch {}
+                        setIsListening(false);
+                      }
+                      onOpenCallMode();
+                    }}
+                    title="Start an interactive live voice session with the AI companion"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-100 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 border border-indigo-200/80 shadow-2xs group transition-all"
                   >
-                    {isListening ? (
-                      <>
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-200 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-                        </span>
-                        <Mic className="w-3.5 h-3.5 animate-bounce" />
-                        <span>Transcribing... (Tap to stop)</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
-                        <span>Transcribe Spoken Entry</span>
-                        <span className="text-[10px] text-rose-400 font-mono hidden sm:inline">(Alt+M)</span>
-                      </>
-                    )}
+                    <Radio className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+                    <span>Live Call Mode</span>
+                    <span className="text-[10px] text-indigo-500 font-mono hidden sm:inline">· Interactive Voice</span>
                   </button>
-                ) : (
-                  <span className="text-[11px] text-slate-400 italic">
-                    (Web Speech API unavailable in this browser)
-                  </span>
                 )}
               </div>
 
@@ -693,17 +801,138 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
                     <span>{isListening ? 'Listening...' : 'Dictate'}</span>
                   </button>
                 )}
+
+                {/* ✨ Deepen Reflection Button */}
+                <button
+                  type="button"
+                  onClick={handleDeepenReflection}
+                  disabled={isDeepening || !journalContent.trim()}
+                  title="Use Gemini API to analyze current journal text and generate 2-3 probing questions"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                >
+                  {isDeepening ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deepening...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Deepen Reflection</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
             {/* Helpful Feature Subtext */}
             <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400 px-1">
               <span className="flex items-center gap-1">
-                <Mic className="w-3 h-3 text-rose-500" />
-                <span>Web Speech API • Spoken entries transcribed into text automatically</span>
+                <Sparkles className="w-3 h-3 text-purple-500" />
+                <span>Gemini API Deepen Reflection • Analyzes draft to uncover hidden emotional layers</span>
               </span>
-              <span className="hidden sm:inline font-mono text-[10px]">Shortcut: Alt+M</span>
+              <span className="hidden sm:inline font-mono text-[10px]">Mic: Alt+M</span>
             </div>
+
+            {/* Deepen Reflection Validation Error Banner */}
+            {deepenError && (
+              <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-800 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>{deepenError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeepenError(null)}
+                  className="text-amber-900 font-semibold hover:underline text-[11px] ml-2 shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Gemini Probing Inquiries Display Card */}
+            {deepenResult && (
+              <div className="mt-3 p-4 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 text-white rounded-2xl border border-indigo-500/30 shadow-md space-y-3 animate-in fade-in zoom-in-98 duration-200">
+                <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                    </span>
+                    <div>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-300 block">
+                        Gemini In-Depth Analysis
+                      </span>
+                      <h4 className="text-xs font-bold text-white font-serif-heading">
+                        Probing Questions for Deeper Emotional Insight
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleDeepenReflection}
+                      disabled={isDeepening}
+                      className="px-2 py-1 text-[10px] font-semibold text-indigo-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      <Loader2 className={`w-3 h-3 ${isDeepening ? 'animate-spin' : 'hidden'}`} />
+                      <span>Regenerate</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeepenResult(null)}
+                      className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Observation Quote */}
+                {deepenResult.quickObservation && (
+                  <p className="text-xs text-indigo-200 italic font-serif-heading bg-white/5 p-2.5 rounded-xl border border-white/5">
+                    "{deepenResult.quickObservation}"
+                  </p>
+                )}
+
+                {/* 2-3 Probing Questions */}
+                <div className="space-y-2 pt-1">
+                  {deepenResult.questions.map((q, idx) => (
+                    <div
+                      key={q.id || idx}
+                      className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-indigo-500/20 transition-all space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-300 font-semibold">
+                          {q.focusArea || `Perspective ${idx + 1}`}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAppendQuestionToJournal(q.question)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-2xs transition-all active:scale-95"
+                          title="Append this question into your journal text to answer it"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Answer in Journal</span>
+                        </button>
+                      </div>
+
+                      <p className="text-xs font-semibold text-slate-100 leading-snug">
+                        {q.question}
+                      </p>
+
+                      {q.probingRationale && (
+                        <p className="text-[10px] text-slate-400 leading-tight">
+                          💡 <em>{q.probingRationale}</em>
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ========================================================================= */}

@@ -9,6 +9,9 @@ import {
   generateMoodForecastService,
   generateMindseraCommentService,
   reconcileMindseraDataService,
+  generateDeepenReflectionService,
+  executeCallModeTurnService,
+  finalizeCallModeSessionService,
 } from './src/server/geminiService';
 
 dotenv.config();
@@ -101,6 +104,67 @@ app.post('/api/reconcile-data', async (req, res) => {
       synthesisSummary: 'Reconciliation active between Feelings Wheel and Mindsera entries.',
       alignedInsightsCount: 0,
       reconciledCorrelations: [],
+    });
+  }
+});
+
+app.post('/api/deepen-reflection', async (req, res) => {
+  try {
+    const result = await generateDeepenReflectionService(req.body);
+    res.json(result);
+  } catch (err: any) {
+    console.warn('Notice in /api/deepen-reflection:', err?.message || err);
+    res.json({
+      quickObservation: 'Your reflection touches on key emotional themes.',
+      questions: [
+        {
+          id: 'q-fb-1',
+          question: 'What is the quietest fear or need beneath what you just wrote?',
+          focusArea: 'Core Need',
+          probingRationale: 'Directs attention beneath narrative thoughts into baseline security.',
+        },
+        {
+          id: 'q-fb-2',
+          question: 'If this feeling could speak freely, what boundary would it ask for right now?',
+          focusArea: 'Boundary Agency',
+          probingRationale: 'Uncovers immediate authentic needs without self-censorship.',
+        },
+      ],
+    });
+  }
+});
+
+app.post('/api/call-mode-turn', async (req, res) => {
+  try {
+    const result = await executeCallModeTurnService(req.body);
+    res.json(result);
+  } catch (err: any) {
+    console.warn('Notice in /api/call-mode-turn:', err?.message || err);
+    res.json({
+      assistantResponse: 'I hear you. Take a soft breath in. What would give your nervous system the greatest relief right now?',
+      detectedEmotion: req.body?.selectedEmotion || 'Reflective',
+      somaticCues: req.body?.somaticSensations || ['Gentle breathing'],
+      groundingTip: 'Drop your shoulders down from your ears and let your exhale linger.',
+    });
+  }
+});
+
+app.post('/api/call-mode-finalize', async (req, res) => {
+  try {
+    const result = await finalizeCallModeSessionService(req.body);
+    res.json(result);
+  } catch (err: any) {
+    console.warn('Notice in /api/call-mode-finalize:', err?.message || err);
+    res.json({
+      journalTitle: 'Spoken Reflection & Voice Insights',
+      primaryEmotion: req.body?.selectedEmotion || 'Peaceful',
+      secondaryEmotion: 'Reflective',
+      intensity: 6,
+      somaticSensations: ['Deep breath', 'Shoulders relaxed'],
+      fullJournalText: 'Transcribed spoken journal reflection captured in live Call Mode.',
+      keyBreakthrough: 'Giving spoken voice to internal thoughts creates immediate cognitive spaciousness.',
+      compassionateInsight: 'Your honest willingness to speak your truth anchors nervous system regulation.',
+      recommendedNextMicroAction: 'Drink a glass of water and rest your eyes from the screen for 5 minutes.',
     });
   }
 });

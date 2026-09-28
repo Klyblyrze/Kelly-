@@ -1,7 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { MoodEntry, HistoryFilterState, MindseraPersona, MindseraMindsComment } from '../types/journal';
+import {
+  MoodEntry,
+  HistoryFilterState,
+  MindseraPersona,
+  MindseraMindsComment,
+  WelltoryBiometrics,
+  SobrietyRecoveryContext,
+} from '../types/journal';
 import { EMOTIONS_DATA, SOMATIC_OPTIONS } from '../data/emotionsData';
 import { MINDSERA_FRAMEWORKS } from '../data/seedData';
+import { ClinicalPdfReportModal } from './ClinicalPdfReportModal';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -44,6 +52,7 @@ import {
   MessageSquare,
   RefreshCw,
   ExternalLink,
+  Printer,
 } from 'lucide-react';
 
 interface MoodHistoryViewProps {
@@ -53,6 +62,8 @@ interface MoodHistoryViewProps {
   onSelectDatePrompt?: (date: string) => void;
   onNavigateToWheel?: () => void;
   onOpenIntegrations?: () => void;
+  welltory?: WelltoryBiometrics;
+  sobriety?: SobrietyRecoveryContext;
 }
 
 const DEFAULT_FILTERS: HistoryFilterState = {
@@ -74,11 +85,14 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
   onSelectDatePrompt,
   onNavigateToWheel,
   onOpenIntegrations,
+  welltory,
+  sobriety,
 }) => {
   const [activeTab, setActiveTab] = useState<'timeline' | 'trends' | 'calendar'>('timeline');
   const [filters, setFilters] = useState<HistoryFilterState>(DEFAULT_FILTERS);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+  const [isPdfReportOpen, setIsPdfReportOpen] = useState(false);
 
   // Mindsera retroactive analysis drawer / modal
   const [analyzingEntry, setAnalyzingEntry] = useState<MoodEntry | null>(null);
@@ -242,6 +256,11 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
         const q = filters.searchQuery.toLowerCase();
         const textMatch = e.journalText.toLowerCase().includes(q);
         const tagMatch = e.tags.some((t) => t.toLowerCase().includes(q));
+        const sentimentMatch =
+          e.sentimentAnalysis &&
+          (e.sentimentAnalysis.valence.toLowerCase().includes(q) ||
+            e.sentimentAnalysis.emotionTags.some((t) => t.toLowerCase().includes(q)) ||
+            e.sentimentAnalysis.themeTags.some((t) => t.toLowerCase().includes(q)));
         const emoMatch =
           e.primaryEmotion.toLowerCase().includes(q) ||
           (e.secondaryEmotion && e.secondaryEmotion.toLowerCase().includes(q)) ||
@@ -250,7 +269,7 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
         const somaticMatch = e.somaticSensations.some((s) => s.toLowerCase().includes(q));
         const aiMatch = e.aiReflection && e.aiReflection.toLowerCase().includes(q);
 
-        if (!textMatch && !tagMatch && !emoMatch && !promptMatch && !somaticMatch && !aiMatch) {
+        if (!textMatch && !tagMatch && !sentimentMatch && !emoMatch && !promptMatch && !somaticMatch && !aiMatch) {
           return false;
         }
       }
@@ -532,15 +551,24 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
             </button>
           </div>
 
-          {/* Export Action */}
+          {/* Export Actions: JSON & Clinical PDF Report */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsPdfReportOpen(true)}
+              title="Export formatted monthly clinical PDF report for clinical review or personal records"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all shadow-2xs cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Clinical PDF Report</span>
+            </button>
+
             <button
               onClick={handleExportJson}
               title="Export matching entries as JSON"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Export ({filteredEntries.length})</span>
+              <span>Export JSON ({filteredEntries.length})</span>
             </button>
           </div>
         </div>
@@ -883,6 +911,28 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
                           Intensity {entry.intensity}/10
                         </span>
 
+                        {/* Automated Sentiment Analysis Badge */}
+                        {entry.sentimentAnalysis && (
+                          <span
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border ${
+                              entry.sentimentAnalysis.valence === 'Positive'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : entry.sentimentAnalysis.valence === 'Cathartic Growth'
+                                ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                : entry.sentimentAnalysis.valence === 'Challenging'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
+                            title={`Automated sentiment analysis score: ${entry.sentimentAnalysis.score > 0 ? '+' : ''}${entry.sentimentAnalysis.score}`}
+                          >
+                            <Sparkles className="w-3 h-3 text-current" />
+                            <span>
+                              Sentiment: {entry.sentimentAnalysis.valence} ({entry.sentimentAnalysis.score > 0 ? '+' : ''}
+                              {entry.sentimentAnalysis.score})
+                            </span>
+                          </span>
+                        )}
+
                         {entry.biometricsSnapshot && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
                             <Activity className="w-3 h-3" />
@@ -933,25 +983,93 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
                       {entry.journalText}
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-1.5 pt-2">
-                      {entry.somaticSensations.map((sens, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-lg"
-                        >
-                          <HeartPulse className="w-2.5 h-2.5 text-rose-500" />
-                          {sens}
-                        </span>
-                      ))}
+                    {/* Somatic & Tagging Section */}
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      {/* Somatic sensations */}
+                      {entry.somaticSensations.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {entry.somaticSensations.map((sens, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-lg"
+                            >
+                              <HeartPulse className="w-2.5 h-2.5 text-rose-500" />
+                              {sens}
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
-                      {entry.tags.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="text-[11px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
+                      {/* Automated Emotion & Theme Tags Display */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Automated Emotion Tags */}
+                        {entry.sentimentAnalysis?.emotionTags &&
+                          entry.sentimentAnalysis.emotionTags.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 mr-0.5 flex items-center gap-0.5">
+                                <Tag className="w-2.5 h-2.5" /> Emotion:
+                              </span>
+                              {entry.sentimentAnalysis.emotionTags.map((emTag, idx) => (
+                                <button
+                                  type="button"
+                                  key={`em-${idx}`}
+                                  onClick={() => setFilters({ ...filters, searchQuery: emTag })}
+                                  title={`Auto-applied emotion tag from sentiment analysis. Click to filter by #${emTag}`}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <span>#{emTag}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Automated Theme Tags */}
+                        {entry.sentimentAnalysis?.themeTags &&
+                          entry.sentimentAnalysis.themeTags.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 mr-0.5 flex items-center gap-0.5">
+                                <Layers className="w-2.5 h-2.5" /> Theme:
+                              </span>
+                              {entry.sentimentAnalysis.themeTags.map((thTag, idx) => (
+                                <button
+                                  type="button"
+                                  key={`th-${idx}`}
+                                  onClick={() => setFilters({ ...filters, searchQuery: thTag })}
+                                  title={`Auto-applied thematic tag from sentiment analysis. Click to filter by #${thTag}`}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <span>#{thTag}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                        {/* Additional User Custom Tags */}
+                        {entry.tags
+                          .filter(
+                            (t) =>
+                              !entry.sentimentAnalysis?.emotionTags.includes(t) &&
+                              !entry.sentimentAnalysis?.themeTags.includes(t)
+                          )
+                          .map((tag, idx) => (
+                            <button
+                              type="button"
+                              key={`user-tag-${idx}`}
+                              onClick={() => setFilters({ ...filters, searchQuery: tag })}
+                              title={`User tag. Click to filter by #${tag}`}
+                              className="text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+
+                        {/* Automated System Indicator */}
+                        {entry.sentimentAnalysis && (
+                          <span className="text-[10px] text-slate-400 font-mono italic ml-auto hidden sm:inline">
+                            ✨ Auto-tagged by sentiment analysis
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {entry.aiReflection && (
@@ -1708,6 +1826,15 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Clinical PDF Report Modal */}
+      <ClinicalPdfReportModal
+        isOpen={isPdfReportOpen}
+        onClose={() => setIsPdfReportOpen(false)}
+        entries={entries}
+        welltory={welltory}
+        sobriety={sobriety}
+      />
     </div>
   );
 };

@@ -96,6 +96,18 @@ export interface MindseraSyncedEntry {
   syncStatus: 'synced' | 'local_only' | 'pending';
 }
 
+export interface MindseraCustomMindLens {
+  id: string;
+  key: string;
+  name: string; // e.g. "Marcus Aurelius", "Carl Jung", "Charlie Munger", "Simone de Beauvoir", "Andrew Huberman"
+  title: string; // e.g. "Stoic Emperor Lens", "Shadow Integration Lens"
+  description: string;
+  tone: string;
+  systemDirective: string;
+  coreQuestionFocus: string;
+  isCustom?: boolean;
+}
+
 export interface MindseraContext {
   enabled: boolean;
   betaUrl: string; // https://beta.mindsera.com/
@@ -106,6 +118,7 @@ export interface MindseraContext {
   activePersona: MindseraPersona;
   activeFrameworkId: string;
   customFrameworks: MindseraFramework[];
+  customLenses?: MindseraCustomMindLens[];
   syncedEntries: MindseraSyncedEntry[];
   lastSyncTimestamp: string;
 }
@@ -234,6 +247,12 @@ export interface MoodEntry {
   appliedFramework?: string;
   mindsaraThemesReferenced?: string[];
   mindseraThemesReferenced?: string[];
+  sentimentAnalysis?: {
+    valence: 'Positive' | 'Challenging' | 'Cathartic Growth' | 'Neutral';
+    score: number;
+    emotionTags: string[];
+    themeTags: string[];
+  };
 }
 
 // ==========================================
@@ -263,6 +282,44 @@ export interface UrgeSurfingRecord {
   outcome: 'Rode the wave successfully' | 'Urge faded with somatic reset' | 'Sought support';
 }
 
+export interface CustomEmergencyContact {
+  id: string;
+  name: string;
+  relationship: string; // e.g. "Sponsor", "Partner", "Therapist", "Close Friend", "Brother"
+  phoneOrHandle: string;
+  preferredMethod: 'call' | 'text' | 'whatsapp' | 'signal';
+  notes: string; // e.g. "Available after 6 PM, knows about my recovery goals"
+  isPrimaryUrgeContact?: boolean;
+}
+
+export interface RelapseCycleStageData {
+  stage: 1 | 2 | 3;
+  name: 'Emotional Relapse' | 'Mental Relapse' | 'Physical Relapse';
+  subtitle: string;
+  coreCharacteristics: string[];
+  historicalTriggersDetected: {
+    triggerName: string;
+    frequencyCount: number;
+    correlatedEmotion: string;
+    biometricMarker: string;
+    sampleJournalQuote: string;
+  }[];
+  warningSignsFromData: string[];
+  clinicalInterventions: {
+    title: string;
+    type: 'somatic' | 'cognitive' | 'social' | 'environmental';
+    actionText: string;
+  }[];
+}
+
+export interface RelapseCycleAnalysis {
+  overallRiskLevel: 'Low' | 'Moderate' | 'Elevated' | 'Acute';
+  currentActiveStage: 1 | 2 | 3 | null;
+  autonomicStressCorrelation: string;
+  sleepDebtCorrelation: string;
+  stages: RelapseCycleStageData[];
+}
+
 export interface SobrietyRecoveryContext {
   enabled: boolean;
   sobrietyStartDate: string; // YYYY-MM-DD
@@ -286,7 +343,72 @@ export interface SobrietyRecoveryContext {
     phoneOrUrl: string;
     role: string;
   }[];
+  customSupportContacts?: CustomEmergencyContact[];
   lastCheckInTimestamp: string;
+}
+
+// ==========================================
+// ACTION SUGGESTIONS ENGINE (LIFE DOMAINS, THERAPEUTIC & EXPLORATION)
+// ==========================================
+export type ActionDomain =
+  | 'Productivity & Work'
+  | 'Finances & Life Admin'
+  | 'School & Skill Growth'
+  | 'Relationships & Social'
+  | 'Therapeutic & Somatic'
+  | 'Journaling & Reflection';
+
+export interface ActionSuggestion {
+  id: string;
+  title: string;
+  domain: ActionDomain;
+  priority: 'High' | 'Medium' | 'Routine';
+  description: string;
+  dataRationale: string;
+  concreteSteps: string[];
+  journalPrompt?: string;
+  exerciseType?: 'breathing' | 'cbt_reframe' | 'vagal_reset' | 'grounding';
+  timeEstimate: string;
+  completed?: boolean;
+}
+
+// ==========================================
+// PERSONAL ANALYSIS & TRAIT GROWTH ENGINE
+// ==========================================
+export type PersonalAnalysisPeriod = '7d' | '30d' | 'all';
+
+export interface PersonalityTraitInsight {
+  traitName: string;
+  category: 'strength' | 'weakness' | 'emerging_quality';
+  dimension: 'Conscientiousness' | 'Emotional Depth' | 'Distress Tolerance' | 'Cognitive Agility' | 'Self-Compassion';
+  score: number; // 0 to 100
+  trend: 'increasing' | 'stable' | 'fluctuating';
+  description: string;
+  journalEvidenceQuotes: {
+    date: string;
+    quote: string;
+    emotion: string;
+  }[];
+  biometricCorrelations: string;
+  actionableRecommendation: string;
+}
+
+export interface PersonalAnalysisReport {
+  period: PersonalAnalysisPeriod;
+  periodLabel: string;
+  archetypeTitle: string;
+  archetypeSubtitle: string;
+  executiveSummary: string;
+  strengths: PersonalityTraitInsight[];
+  weaknesses: PersonalityTraitInsight[];
+  emergingQualities: PersonalityTraitInsight[];
+  psychologicalEvolutionNarrative: string;
+  growthMetrics: {
+    emotionalGranularityScore: number; // 0-100
+    resilienceCapacityScore: number; // 0-100
+    vulnerabilityOpennessScore: number; // 0-100
+    somaticAwarenessScore: number; // 0-100
+  };
 }
 
 export interface GeneratedPrompt {
@@ -341,3 +463,78 @@ export interface HistoryFilterState {
   selectedSomatic: string[];
   hasReflectionOnly: boolean;
 }
+
+// ==========================================
+// EXPANDED THIRD-PARTY INTEGRATIONS & SYNC ENGINE
+// ==========================================
+export type IntegrationCategory =
+  | 'Wearables & Biometrics'
+  | 'Mental Health & Cognition'
+  | 'Productivity & Sprints'
+  | 'Lifestyle & Habits'
+  | 'Custom APIs';
+
+export interface ThirdPartyIntegration {
+  id: string;
+  name: string;
+  category: IntegrationCategory;
+  description: string;
+  iconName: string;
+  connected: boolean;
+  accountIdentifier: string; // e.g. "k.rzendzian@welltory.id", "k.rzendzian@samsung.com"
+  verifiedOwnerEmail: string; // e.g. "k.rzendzian@gmail.com"
+  authType: 'OAuth 2.0 PKCE' | 'Bearer Token' | 'Direct MCP' | 'Apple HealthKit Local' | 'API Key';
+  syncStatus: 'synced' | 'syncing' | 'idle' | 'warning' | 'disconnected';
+  lastSyncTimestamp: string;
+  syncFrequency: 'realtime' | '15m' | 'hourly' | 'manual';
+  dataIngestedSummary: string;
+  permissions: string[];
+  deviceHardware?: string;
+  rawTelemetrySample?: Record<string, string | number | boolean | object>;
+}
+
+// ==========================================
+// DAILY INTENTION & ACTION LINKING
+// ==========================================
+export type IntentionCategory =
+  | 'Somatic'
+  | 'Boundary'
+  | 'Sobriety'
+  | 'Productivity'
+  | 'Connection'
+  | 'Mindfulness';
+
+export interface DailyIntention {
+  id: string;
+  date: string; // YYYY-MM-DD
+  text: string;
+  category: IntentionCategory;
+  completed: boolean;
+  completedAt?: string;
+  notes?: string;
+}
+
+// ==========================================
+// CALL MODE & LIVE VOICE JOURNALING
+// ==========================================
+export interface CallModeMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  speakerName: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface CallModeFinalizedSummary {
+  journalTitle: string;
+  primaryEmotion: string;
+  secondaryEmotion: string;
+  intensity: number;
+  somaticSensations: string[];
+  fullJournalText: string;
+  keyBreakthrough: string;
+  compassionateInsight: string;
+  recommendedNextMicroAction: string;
+}
+
+

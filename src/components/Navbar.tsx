@@ -11,6 +11,11 @@ import {
   Layers,
   ShieldCheck,
   Compass,
+  FileText,
+  LayoutDashboard,
+  TrendingUp,
+  Sliders,
+  Calendar,
 } from 'lucide-react';
 import {
   WelltoryBiometrics,
@@ -20,11 +25,27 @@ import {
   SobrietyRecoveryContext,
 } from '../types/journal';
 
+export type AppActiveView =
+  | 'dashboard'
+  | 'journal'
+  | 'sobriety'
+  | 'analysis'
+  | 'personal'
+  | 'forecast'
+  | 'integrations'
+  | 'wheel'
+  | 'history'
+  | 'patterns'
+  | 'predictive'
+  | 'recovery'
+  | 'holistic';
+
 interface NavbarProps {
-  activeView: 'wheel' | 'history' | 'patterns' | 'predictive' | 'recovery' | 'holistic';
-  onChangeView: (view: 'wheel' | 'history' | 'patterns' | 'predictive' | 'recovery' | 'holistic') => void;
+  activeView: AppActiveView;
+  onChangeView: (view: AppActiveView) => void;
   onOpenCheckIn: () => void;
   onOpenIntegrations: () => void;
+  onOpenClinicalReport?: () => void;
   welltory: WelltoryBiometrics;
   mindsara: MindsaraContext;
   samsungHealth: SamsungHealthData;
@@ -38,6 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onChangeView,
   onOpenCheckIn,
   onOpenIntegrations,
+  onOpenClinicalReport,
   welltory,
   mindsara,
   samsungHealth,
@@ -45,13 +67,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   sobriety,
   totalEntriesCount,
 }) => {
+  // Normalize active view to current primary tabs
+  const isDashboard = activeView === 'dashboard';
+  const isJournal = activeView === 'journal' || activeView === 'wheel';
+  const isSobriety = activeView === 'sobriety' || activeView === 'recovery';
+  const isAnalysis =
+    activeView === 'analysis' ||
+    activeView === 'patterns' ||
+    activeView === 'history' ||
+    activeView === 'holistic';
+  const isPersonal = activeView === 'personal';
+  const isForecast = activeView === 'forecast' || activeView === 'predictive';
+  const isIntegrations = activeView === 'integrations';
+
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-xl border-b border-slate-800/80 px-4 sm:px-6 lg:px-8 py-3 transition-all">
+    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-4 sm:px-6 lg:px-8 py-3 transition-all">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         {/* Brand & Logo */}
         <div
-          onClick={() => onChangeView('wheel')}
-          className="flex items-center gap-3 cursor-pointer group"
+          onClick={() => onChangeView('dashboard')}
+          className="flex items-center gap-3 cursor-pointer group shrink-0"
         >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 p-0.5 shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center">
             <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
@@ -63,166 +98,143 @@ export const Navbar: React.FC<NavbarProps> = ({
               <h1 className="font-serif font-bold text-base sm:text-lg text-slate-100 tracking-tight leading-tight">
                 Feelings Wheel
               </h1>
-              <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-semibold">
-                AI Journal
+              <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-semibold hidden sm:inline">
+                Dual Console
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 hidden sm:flex font-mono">
-              <span>Mindsera</span>
-              <span className="text-slate-600">·</span>
-              <span>Welltory</span>
-              <span className="text-slate-600">·</span>
-              <span>TickTick MCP</span>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 hidden xl:flex font-mono">
+              <span>Welltory HRV</span>
               <span className="text-slate-600">·</span>
               <span>Samsung Health</span>
+              <span className="text-slate-600">·</span>
+              <span>SMART Recovery</span>
             </div>
           </div>
         </div>
 
-        {/* View Switchers */}
+        {/* Tabular View Switchers */}
         <nav className="flex items-center gap-1 p-1 bg-slate-900/90 rounded-2xl border border-slate-800/80 overflow-x-auto scrollbar-none">
+          {/* Tab 1: Dashboard Home */}
           <button
-            onClick={() => onChangeView('wheel')}
-            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === 'wheel'
-                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60'
+            onClick={() => onChangeView('dashboard')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isDashboard
+                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Dashboard</span>
+          </button>
+
+          {/* Tab 2: Journaling & Wheel */}
+          <button
+            onClick={() => onChangeView('journal')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isJournal
+                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60 font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Wheel</span>
+            <span>Journaling</span>
           </button>
 
+          {/* Tab 3: Sobriety Hub */}
           <button
-            onClick={() => onChangeView('history')}
-            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === 'history'
-                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <PieChart className="w-3.5 h-3.5 text-blue-400" />
-            <span>History</span>
-            {totalEntriesCount > 0 && (
-              <span className="text-[10px] font-mono text-slate-400 hidden md:inline ml-0.5">
-                ({totalEntriesCount})
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => onChangeView('predictive')}
-            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === 'predictive'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-xs font-bold ring-1 ring-white/20'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Compass className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Predictive Forecast</span>
-            <span className="hidden sm:inline text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 font-mono font-bold">
-              AI
-            </span>
-          </button>
-
-          <button
-            onClick={() => onChangeView('patterns')}
-            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === 'patterns'
-                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Brain className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Pattern & Scatter</span>
-          </button>
-
-          <button
-            onClick={() => onChangeView('recovery')}
-            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === 'recovery'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs font-bold ring-1 ring-white/20'
+            onClick={() => onChangeView('sobriety')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isSobriety
+                ? 'bg-emerald-950/80 text-emerald-200 shadow-xs border border-emerald-500/40 font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Sobriety</span>
+            <span>Sobriety Hub</span>
             {sobriety?.enabled && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 font-mono font-bold">
+              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-300 font-mono font-bold">
                 Day {sobriety.currentStreakDays}
               </span>
             )}
           </button>
 
+          {/* Tab 4: Data Trends & Analysis */}
           <button
-            onClick={() => onChangeView('holistic')}
-            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeView === 'holistic'
-                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60'
+            onClick={() => onChangeView('analysis')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isAnalysis
+                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60 font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Globe className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Holistic Matrix</span>
+            <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
+            <span>Data Trends</span>
+          </button>
+
+          {/* Tab 5: Personal Analysis & Traits */}
+          <button
+            onClick={() => onChangeView('personal')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isPersonal
+                ? 'bg-purple-950/80 text-purple-200 shadow-xs border border-purple-500/40 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Brain className="w-3.5 h-3.5 text-purple-400" />
+            <span>Personal Analysis</span>
+          </button>
+
+          {/* Tab 6: Forecast & Forward Looking */}
+          <button
+            onClick={() => onChangeView('forecast')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isForecast
+                ? 'bg-gradient-to-r from-purple-900/80 to-indigo-900/80 text-purple-200 shadow-xs border border-purple-500/40 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 text-purple-400" />
+            <span>Forecast</span>
+            <span className="hidden sm:inline text-[9px] px-1.5 py-0.2 rounded-md bg-purple-500/30 text-purple-200 font-mono font-bold">
+              AI
+            </span>
+          </button>
+
+          {/* Tab 6: Integrations Hub */}
+          <button
+            onClick={() => onChangeView('integrations')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ${
+              isIntegrations
+                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Integrations</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </button>
         </nav>
 
-        {/* Right Actions: Integrations & Quick Check-In */}
-        <div className="flex items-center gap-2">
-          {/* Sobriety Quick Badge */}
-          {sobriety?.enabled && (
+        {/* Right Actions: Quick Check-In & Export PDF */}
+        <div className="flex items-center gap-2 shrink-0">
+          {onOpenClinicalReport && (
             <button
-              onClick={() => onChangeView('recovery')}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-900/80 transition-colors shadow-2xs"
-              title={`Sobriety Hub • Day ${sobriety.currentStreakDays} Alcohol-Free (${sobriety.treatmentApproach})`}
+              onClick={onOpenClinicalReport}
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all cursor-pointer"
+              title="Export formatted clinical PDF summary"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Day {sobriety.currentStreakDays} Sober</span>
+              <FileText className="w-3.5 h-3.5 text-rose-400" />
+              <span>Export PDF</span>
             </button>
           )}
-          {/* Integrations Toggle */}
-          <button
-            onClick={onOpenIntegrations}
-            title="Manage connected health & project integrations"
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all"
-          >
-            <div className="flex items-center -space-x-1">
-              <span
-                className={`w-2 h-2 rounded-full ring-2 ring-slate-950 ${
-                  mindsara.enabled ? 'bg-purple-400' : 'bg-slate-600'
-                }`}
-                title="Mindsera"
-              />
-              <span
-                className={`w-2 h-2 rounded-full ring-2 ring-slate-950 ${
-                  welltory.enabled ? 'bg-rose-400' : 'bg-slate-600'
-                }`}
-                title="Welltory"
-              />
-              <span
-                className={`w-2 h-2 rounded-full ring-2 ring-slate-950 ${
-                  tasks.enabled ? 'bg-indigo-400' : 'bg-slate-600'
-                }`}
-                title="TickTick MCP"
-              />
-              <span
-                className={`w-2 h-2 rounded-full ring-2 ring-slate-950 ${
-                  samsungHealth.enabled ? 'bg-blue-400' : 'bg-slate-600'
-                }`}
-                title="Samsung Health"
-              />
-            </div>
-            <span className="hidden md:inline font-mono text-[11px]">Integrations Hub</span>
-            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
-          </button>
 
-          {/* Quick Check-In Button */}
+          {/* Primary Quick Check-in Button */}
           <button
             onClick={onOpenCheckIn}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 rounded-xl shadow-xs transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs sm:text-sm font-semibold shadow-xs hover:shadow-indigo-500/20 transition-all cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Check In</span>
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Check-In</span>
           </button>
         </div>
       </div>

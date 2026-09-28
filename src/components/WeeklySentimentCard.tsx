@@ -119,15 +119,13 @@ export const WeeklySentimentCard: React.FC<WeeklySentimentCardProps> = ({
     <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200/80 transition-all hover:border-slate-300">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         {/* Left Side: Summary Metrics & Sentiment */}
-        <div className="space-y-3 lg:max-w-md">
+        <div className="space-y-2.5 lg:max-w-md">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-amber-50 text-amber-700">
-              <TrendingUp className="w-4 h-4" />
-            </span>
             <h3 className="text-base sm:text-lg font-bold text-slate-900 font-serif-heading tracking-tight">
               Weekly Sentiment Trend
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+            <span className="text-slate-300">·</span>
+            <span className="text-xs text-slate-500 font-medium">
               Last 7 Days
             </span>
           </div>
@@ -139,15 +137,7 @@ export const WeeklySentimentCard: React.FC<WeeklySentimentCardProps> = ({
             <span className="text-xs text-slate-400 font-medium">/ 10 intensity</span>
 
             {/* Trend Indicator */}
-            <div
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                trendDirection === 'up'
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                  : trendDirection === 'down'
-                  ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
-            >
+            <div className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
               {trendDirection === 'up' ? (
                 <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
               ) : trendDirection === 'down' ? (
@@ -155,7 +145,7 @@ export const WeeklySentimentCard: React.FC<WeeklySentimentCardProps> = ({
               ) : (
                 <Minus className="w-3.5 h-3.5 text-slate-400" />
               )}
-              <span>
+              <span className={trendDirection === 'up' ? 'text-amber-800' : trendDirection === 'down' ? 'text-blue-800' : 'text-slate-600'}>
                 {trendDirection === 'up'
                   ? `+${trendDiff} momentum`
                   : trendDirection === 'down'

@@ -1,12 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Wind, Play, Pause, RotateCcw, X, HeartPulse, Flame, ShieldCheck } from 'lucide-react';
 
-export const SomaticGroundingBar: React.FC = () => {
+interface SomaticGroundingBarProps {
+  forceOpen?: boolean;
+  initialMode?: 'vagal' | 'urge_surf';
+  onCloseBar?: () => void;
+}
+
+export const SomaticGroundingBar: React.FC<SomaticGroundingBarProps> = ({
+  forceOpen = false,
+  initialMode = 'urge_surf',
+  onCloseBar,
+}) => {
   const [isActive, setIsActive] = useState(false);
-  const [mode, setMode] = useState<'vagal' | 'urge_surf'>('urge_surf');
+  const [mode, setMode] = useState<'vagal' | 'urge_surf'>(initialMode);
   const [phase, setPhase] = useState<'Inhale' | 'Hold' | 'Exhale' | 'Rest'>('Inhale');
   const [countdown, setCountdown] = useState(4);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(forceOpen);
+
+  useEffect(() => {
+    if (forceOpen) {
+      setIsOpen(true);
+      setIsActive(true);
+      if (initialMode) setMode(initialMode);
+    }
+  }, [forceOpen, initialMode]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -107,6 +125,7 @@ export const SomaticGroundingBar: React.FC = () => {
           onClick={() => {
             setIsActive(false);
             setIsOpen(false);
+            onCloseBar?.();
           }}
           className="text-slate-400 hover:text-slate-600 p-1"
         >

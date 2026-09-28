@@ -4,6 +4,7 @@ import {
   WelltoryDayRecord,
   MindseraContext,
   MindseraFramework,
+  MindseraCustomMindLens,
   MindseraSyncedEntry,
   MindseraMindsComment,
   MindsaraContext,
@@ -14,7 +15,70 @@ import {
   AiCoWorkData,
   GeminiSparkData,
   SobrietyRecoveryContext,
+  DailyIntention,
 } from '../types/journal';
+import { analyzeJournalSentimentAndTags } from '../utils/sentimentTagger';
+
+// ============================================================================
+// MINDSERA DEFAULT MIND LENSES (https://beta.mindsera.com/)
+// ============================================================================
+export const DEFAULT_MINDSERA_LENSES: MindseraCustomMindLens[] = [
+  {
+    id: 'lens-stoic',
+    key: 'stoic',
+    name: 'Marcus Aurelius & Seneca',
+    title: 'Stoic Emperor Lens',
+    description: 'Dichotomy of control, Amor Fati, virtue ethics, and detaching internal peace from fortune.',
+    tone: 'Steadfast, grave, compassionate, grounded',
+    systemDirective: 'Focus on what is within voluntary control versus external fate. Refuse panic and embrace amor fati.',
+    coreQuestionFocus: 'What remains within your sovereign power right now, regardless of external circumstances?',
+    isCustom: false,
+  },
+  {
+    id: 'lens-psychologist',
+    key: 'psychologist',
+    name: 'Carl Rogers & CBT',
+    title: 'Humanistic & CBT Lens',
+    description: 'Unconditional positive regard, emotional validation, unmet needs, somatic safety, and non-judgment.',
+    tone: 'Warm, empathic, validating, gentle',
+    systemDirective: 'Validate emotions, uncover core needs without shame, and encourage somatic safety.',
+    coreQuestionFocus: 'If you treated yourself with the tenderness you would offer a loved one, what would you say?',
+    isCustom: false,
+  },
+  {
+    id: 'lens-challenger',
+    key: 'challenger',
+    name: 'Socrates & Charlie Munger',
+    title: 'Socratic Inversion Lens',
+    description: 'Probing hidden assumptions, exposing rationalizations, cognitive inversion, and intellectual honesty.',
+    tone: 'Rigorous, direct, loving, intellectually fearless',
+    systemDirective: 'Challenge unexamined assumptions, detect avoidance, and invert the problem.',
+    coreQuestionFocus: 'What uncomfortable truth or avoidance are you rationalizing away right now?',
+    isCustom: false,
+  },
+  {
+    id: 'lens-strategist',
+    key: 'strategist',
+    name: 'First-Principles Strategist',
+    title: '80/20 Leverage Lens',
+    description: 'Deconstructing bottlenecks to baseline physics, eliminating complexity, and identifying single key levers.',
+    tone: 'Decisive, structural, high-clarity, pragmatic',
+    systemDirective: 'Strip away noise and social consensus to find the irreducible constraint and primary leverage point.',
+    coreQuestionFocus: 'If you could only solve one bottleneck today that makes everything else simpler, which is it?',
+    isCustom: false,
+  },
+  {
+    id: 'lens-neuroscientist',
+    key: 'neuroscientist',
+    name: 'Andrew Huberman',
+    title: 'Autonomic Neurobiology Lens',
+    description: 'Translating emotional tension into autonomic states (ventral vs sympathetic), vagal tone, and biological regulation.',
+    tone: 'Clinical, grounded, practical, protocol-oriented',
+    systemDirective: 'Translate feelings to autonomic nervous system states and deploy physiological protocols.',
+    coreQuestionFocus: 'How will you signal physiological safety to your brainstem before making your next move?',
+    isCustom: false,
+  },
+];
 
 // ============================================================================
 // MINDSERA CUSTOM FRAMEWORKS (https://beta.mindsera.com/)
@@ -496,6 +560,7 @@ export const INITIAL_MINDSERA_CONTEXT: MindseraContext = {
   activePersona: 'stoic',
   activeFrameworkId: 'dichotomy_of_control',
   customFrameworks: MINDSERA_FRAMEWORKS,
+  customLenses: DEFAULT_MINDSERA_LENSES,
   syncedEntries: SEED_MINDSERA_ENTRIES,
   lastSyncTimestamp: new Date().toISOString(),
 };
@@ -680,6 +745,35 @@ export const INITIAL_SOBRIETY_RECOVERY: SobrietyRecoveryContext = {
       name: 'Alex (Recovery Support Partner)',
       phoneOrUrl: '555-0192',
       role: 'Designated Sponsor / Accountability Partner',
+    },
+  ],
+  customSupportContacts: [
+    {
+      id: 'csc-1',
+      name: 'Alex Rivera',
+      relationship: 'Sponsor / Accountability Partner',
+      phoneOrHandle: '555-0192',
+      preferredMethod: 'call',
+      notes: 'Available anytime after 5 PM. Knows my 43-day journey and helps talk down evening bargaining.',
+      isPrimaryUrgeContact: true,
+    },
+    {
+      id: 'csc-2',
+      name: 'Dr. Sarah Lin, PsyD',
+      relationship: 'Licensed Addiction Therapist',
+      phoneOrHandle: '555-0841',
+      preferredMethod: 'call',
+      notes: 'Bi-weekly somatic CBT therapist. Reach out via client portal for urgent check-ins.',
+      isPrimaryUrgeContact: false,
+    },
+    {
+      id: 'csc-3',
+      name: 'Maya (Partner)',
+      relationship: 'Partner',
+      phoneOrHandle: '555-0338',
+      preferredMethod: 'text',
+      notes: 'Send quick code "Orange" if feeling overwhelmed at social gatherings so we can leave gracefully.',
+      isPrimaryUrgeContact: false,
     },
   ],
   lastCheckInTimestamp: new Date().toISOString(),
@@ -1007,14 +1101,39 @@ const STORAGE_KEYS = {
   AI_COWORK: 'feelings_wheel_ai_cowork_v2',
   GEMINI_SPARK: 'feelings_wheel_gemini_spark_v2',
   SOBRIETY: 'feelings_wheel_sobriety_recovery_v2',
+  DAILY_INTENTION: 'feelings_wheel_daily_intention_v1',
 };
 
 export function loadStoredEntries(): MoodEntry[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MOOD_ENTRIES);
-    if (!raw) return SEED_MOOD_ENTRIES;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : SEED_MOOD_ENTRIES;
+    const source = raw ? JSON.parse(raw) : SEED_MOOD_ENTRIES;
+    const entriesList: MoodEntry[] =
+      Array.isArray(source) && source.length > 0 ? source : SEED_MOOD_ENTRIES;
+
+    return entriesList.map((entry) => {
+      if (!entry.sentimentAnalysis) {
+        const analyzed = analyzeJournalSentimentAndTags(
+          entry.journalText,
+          entry.primaryEmotion,
+          entry.secondaryEmotion,
+          entry.somaticSensations,
+          entry.intensity,
+          entry.tags
+        );
+        return {
+          ...entry,
+          tags: analyzed.allTags,
+          sentimentAnalysis: {
+            valence: analyzed.valence,
+            score: analyzed.score,
+            emotionTags: analyzed.emotionTags,
+            themeTags: analyzed.themeTags,
+          },
+        };
+      }
+      return entry;
+    });
   } catch {
     return SEED_MOOD_ENTRIES;
   }
@@ -1051,7 +1170,18 @@ export function loadStoredMindsera(): MindseraContext {
     const raw = localStorage.getItem(STORAGE_KEYS.MINDSERA) || localStorage.getItem(STORAGE_KEYS.MINDSARA_LEGACY);
     if (!raw) return INITIAL_MINDSERA_CONTEXT;
     const parsed = JSON.parse(raw);
-    return { ...INITIAL_MINDSERA_CONTEXT, ...parsed, customFrameworks: MINDSERA_FRAMEWORKS };
+    return {
+      ...INITIAL_MINDSERA_CONTEXT,
+      ...parsed,
+      customFrameworks:
+        Array.isArray(parsed.customFrameworks) && parsed.customFrameworks.length > 0
+          ? parsed.customFrameworks
+          : MINDSERA_FRAMEWORKS,
+      customLenses:
+        Array.isArray(parsed.customLenses) && parsed.customLenses.length > 0
+          ? parsed.customLenses
+          : DEFAULT_MINDSERA_LENSES,
+    };
   } catch {
     return INITIAL_MINDSERA_CONTEXT;
   }
@@ -1068,6 +1198,43 @@ export function saveStoredMindsera(data: MindseraContext): void {
 // Aliases for backward-compatibility with prior components
 export const loadStoredMindsara = loadStoredMindsera;
 export const saveStoredMindsara = saveStoredMindsera;
+
+export const INITIAL_DAILY_INTENTION: DailyIntention = {
+  id: 'intention-today',
+  date: new Date().toISOString().split('T')[0],
+  text: 'Pause for 3 physiological breaths before answering high-pressure messages',
+  category: 'Somatic',
+  completed: false,
+  notes: 'Preserves prefrontal executive clarity and autonomic stability.',
+};
+
+export function loadStoredDailyIntention(): DailyIntention {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAILY_INTENTION);
+    if (!raw) return INITIAL_DAILY_INTENTION;
+    const parsed = JSON.parse(raw);
+    const today = new Date().toISOString().split('T')[0];
+    if (parsed.date !== today) {
+      return {
+        ...parsed,
+        date: today,
+        completed: false,
+        completedAt: undefined,
+      };
+    }
+    return parsed;
+  } catch {
+    return INITIAL_DAILY_INTENTION;
+  }
+}
+
+export function saveStoredDailyIntention(data: DailyIntention): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DAILY_INTENTION, JSON.stringify(data));
+  } catch (err) {
+    console.warn('Notice saving Daily Intention', err);
+  }
+}
 
 export function loadStoredSamsungHealth(): SamsungHealthData {
   try {
