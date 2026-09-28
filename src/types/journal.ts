@@ -455,7 +455,8 @@ export interface MoodForecast {
 export interface HistoryFilterState {
   searchQuery: string;
   selectedEmotions: string[];
-  dateRangePreset: 'all' | '7d' | '30d' | 'this_month' | 'last_3m' | 'custom';
+  selectedSmartTags?: string[];
+  dateRangePreset: 'all' | 'today' | '7d' | '30d' | 'this_month' | 'last_3m' | 'custom';
   fromDate: string;
   toDate: string;
   minIntensity: number;

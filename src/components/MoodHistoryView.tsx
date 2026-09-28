@@ -10,6 +10,7 @@ import {
 import { EMOTIONS_DATA, SOMATIC_OPTIONS } from '../data/emotionsData';
 import { MINDSERA_FRAMEWORKS } from '../data/seedData';
 import { ClinicalPdfReportModal } from './ClinicalPdfReportModal';
+import { analyzeJournalSentimentAndTags } from '../utils/sentimentTagger';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -69,6 +70,7 @@ interface MoodHistoryViewProps {
 const DEFAULT_FILTERS: HistoryFilterState = {
   searchQuery: '',
   selectedEmotions: [],
+  selectedSmartTags: [],
   dateRangePreset: 'all',
   fromDate: '',
   toDate: '',
@@ -127,6 +129,16 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
       return;
     }
 
+    if (preset === 'today') {
+      setFilters((prev) => ({
+        ...prev,
+        dateRangePreset: 'today',
+        fromDate: todayStr,
+        toDate: todayStr,
+      }));
+      return;
+    }
+
     if (preset === '7d') {
       const past = new Date();
       past.setDate(past.getDate() - 7);
@@ -177,6 +189,20 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
     });
   };
 
+  const toggleSmartTagFilter = (smartTag: string) => {
+    setFilters((prev) => {
+      const current = prev.selectedSmartTags || [];
+      const cleanTag = smartTag.replace(/^#/, '');
+      const exists = current.includes(cleanTag);
+      return {
+        ...prev,
+        selectedSmartTags: exists
+          ? current.filter((t) => t !== cleanTag)
+          : [...current, cleanTag],
+      };
+    });
+  };
+
   const toggleSomaticFilter = (somatic: string) => {
     setFilters((prev) => {
       const exists = prev.selectedSomatic.includes(somatic);
@@ -193,6 +219,31 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
     setFilters(DEFAULT_FILTERS);
     setSelectedCalendarDate(null);
   };
+
+  // Discovered Smart Tags across all entries (Strictly verified & auto-tagged)
+  const allSmartTags = useMemo(() => {
+    const counts: Record<string, number> = {};
+    entries.forEach((e) => {
+      // Use existing sentimentAnalysis tags or run lightweight sentiment inference
+      const sa = e.sentimentAnalysis || analyzeJournalSentimentAndTags(e.journalText, e.primaryEmotion);
+      const combined = [
+        ...(sa.emotionTags || []),
+        ...(sa.themeTags || []),
+        ...(e.tags || []),
+      ];
+      combined.forEach((t) => {
+        if (!t) return;
+        const clean = t.trim().replace(/^#/, '');
+        if (clean && clean !== 'Daily Check-in' && clean !== 'General' && clean.length > 2) {
+          counts[clean] = (counts[clean] || 0) + 1;
+        }
+      });
+    });
+
+    return Object.entries(counts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [entries]);
 
   // Generate Mindsera Minds Comment for a selected past entry
   const handleGenerateMindsCommentForEntry = async () => {
@@ -237,6 +288,7 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
     return (
       filters.searchQuery.trim() !== '' ||
       filters.selectedEmotions.length > 0 ||
+      (filters.selectedSmartTags && filters.selectedSmartTags.length > 0) ||
       filters.dateRangePreset !== 'all' ||
       filters.fromDate !== '' ||
       filters.toDate !== '' ||
@@ -279,6 +331,21 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
         if (!filters.selectedEmotions.includes(e.primaryEmotion)) {
           return false;
         }
+      }
+
+      // 2.5 Smart Tagging category (Strict multi-tag intersection)
+      if (filters.selectedSmartTags && filters.selectedSmartTags.length > 0) {
+        const sa = e.sentimentAnalysis || analyzeJournalSentimentAndTags(e.journalText, e.primaryEmotion);
+        const entryTags = [
+          ...(sa.emotionTags || []),
+          ...(sa.themeTags || []),
+          ...(e.tags || []),
+        ].map((t) => t.toLowerCase().replace(/^#/, ''));
+
+        const matchesSmartTag = filters.selectedSmartTags.some((st) =>
+          entryTags.includes(st.toLowerCase().replace(/^#/, ''))
+        );
+        if (!matchesSmartTag) return false;
       }
 
       // 3. Date range
@@ -604,10 +671,12 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
                 <CalendarRange className="w-3.5 h-3.5" />
                 Range:
               </span>
-              {(['all', '7d', '30d', 'this_month', 'custom'] as const).map((preset) => {
+              {(['all', 'today', '7d', '30d', 'this_month', 'custom'] as const).map((preset) => {
                 const label =
                   preset === 'all'
-                    ? 'All'
+                    ? 'All Time'
+                    : preset === 'today'
+                    ? 'Today'
                     : preset === '7d'
                     ? 'Last 7 Days'
                     : preset === '30d'
@@ -622,7 +691,7 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
                   <button
                     key={preset}
                     onClick={() => handleDatePresetChange(preset)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-slate-900 text-white shadow-2xs'
                         : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
@@ -636,7 +705,7 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
               {/* Advanced Filter Toggle Button */}
               <button
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all ${
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
                   showAdvancedFilters || filters.minIntensity > 1 || filters.maxIntensity < 10 || filters.selectedSomatic.length > 0
                     ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                     : 'bg-white text-slate-600 hover:bg-slate-200 border-slate-200'
@@ -671,7 +740,7 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
               {(filters.fromDate || filters.toDate) && (
                 <button
                   onClick={() => setFilters({ ...filters, fromDate: '', toDate: '' })}
-                  className="text-slate-400 hover:text-slate-600 underline text-[11px]"
+                  className="text-slate-400 hover:text-slate-600 underline text-[11px] cursor-pointer"
                 >
                   Clear dates
                 </button>
@@ -688,9 +757,9 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
               {filters.selectedEmotions.length > 0 && (
                 <button
                   onClick={() => setFilters({ ...filters, selectedEmotions: [] })}
-                  className="text-[11px] text-slate-400 hover:text-slate-700 underline"
+                  className="text-[11px] text-slate-400 hover:text-slate-700 underline cursor-pointer"
                 >
-                  Select All
+                  Clear Feelings
                 </button>
               )}
             </div>
@@ -704,7 +773,7 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
                   <button
                     key={emo.id}
                     onClick={() => toggleEmotionFilter(emo.name)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
                       isSelected
                         ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
@@ -727,6 +796,125 @@ export const MoodHistoryView: React.FC<MoodHistoryViewProps> = ({
               })}
             </div>
           </div>
+
+          {/* Row 3.5: Smart Tagging Filter Pills (AI Discovered & Sentiment Tags) */}
+          {allSmartTags.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-500 uppercase tracking-wider text-[11px]">
+                    Filter by Smart Tags:
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-purple-100 text-purple-700 font-semibold border border-purple-200/60">
+                    ✨ Smart Tagging Enabled
+                  </span>
+                </div>
+                {(filters.selectedSmartTags && filters.selectedSmartTags.length > 0) && (
+                  <button
+                    onClick={() => setFilters({ ...filters, selectedSmartTags: [] })}
+                    className="text-[11px] text-purple-600 hover:text-purple-800 underline cursor-pointer"
+                  >
+                    Clear Smart Tags
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {allSmartTags.slice(0, 16).map(({ tag, count }) => {
+                  const isSelected = (filters.selectedSmartTags || []).includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => toggleSmartTagFilter(tag)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                        isSelected
+                          ? 'bg-purple-900 text-purple-100 border-purple-800 shadow-2xs'
+                          : 'bg-white text-purple-800 hover:bg-purple-50/80 border-purple-200/80'
+                      }`}
+                    >
+                      <Tag className="w-2.5 h-2.5 text-purple-500" />
+                      <span>#{tag}</span>
+                      <span
+                        className={`text-[10px] px-1 py-0.2 rounded-full ${
+                          isSelected ? 'bg-purple-800 text-purple-200' : 'bg-purple-100 text-purple-700'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Active Filter Summary Bar */}
+          {isFilterActive && (
+            <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                  Active Filters:
+                </span>
+
+                {filters.searchQuery && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-medium">
+                    Search: "{filters.searchQuery}"
+                    <button onClick={() => setFilters({ ...filters, searchQuery: '' })} className="hover:text-indigo-900">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {filters.dateRangePreset !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-200 border border-slate-300 text-slate-800 font-medium">
+                    Range: {filters.dateRangePreset}
+                    <button onClick={() => handleDatePresetChange('all')} className="hover:text-slate-900">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {filters.selectedEmotions.map((emo) => (
+                  <span key={emo} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-medium">
+                    {emo}
+                    <button onClick={() => toggleEmotionFilter(emo)} className="hover:text-amber-950">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+
+                {(filters.selectedSmartTags || []).map((st) => (
+                  <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-800 font-medium">
+                    #{st}
+                    <button onClick={() => toggleSmartTagFilter(st)} className="hover:text-purple-950">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+
+                {filters.selectedSomatic.map((som) => (
+                  <span key={som} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-800 font-medium">
+                    {som}
+                    <button onClick={() => toggleSomaticFilter(som)} className="hover:text-rose-950">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-slate-500 font-mono text-[11px]">
+                  Showing {filteredEntries.length} of {entries.length}
+                </span>
+                <button
+                  onClick={resetFilters}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 underline cursor-pointer"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Row 4: Expandable Advanced Filters (Intensity & Somatic) */}
           {showAdvancedFilters && (

@@ -36,7 +36,11 @@ import {
   Target,
   Check,
   Edit3,
+  Mic,
+  PenTool,
+  PhoneCall,
 } from 'lucide-react';
+import { QuickEntryWidget } from './QuickEntryWidget';
 
 interface DashboardHomeViewProps {
   entries: MoodEntry[];
@@ -56,6 +60,8 @@ interface DashboardHomeViewProps {
   dailyIntention?: DailyIntention;
   onSetDailyIntention?: (intention: DailyIntention) => void;
   onToggleDailyIntentionComplete?: () => void;
+  onQuickLogMood?: (entry: Omit<MoodEntry, 'id'>) => Promise<void>;
+  onOpenCallMode?: () => void;
 }
 
 export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
@@ -74,6 +80,8 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   dailyIntention,
   onSetDailyIntention,
   onToggleDailyIntentionComplete,
+  onQuickLogMood,
+  onOpenCallMode,
 }) => {
   // Calendar month state (defaults to September 2026 based on mock timeline)
   const [currentDate, setCurrentDate] = useState(() => new Date('2026-09-28T12:00:00'));
