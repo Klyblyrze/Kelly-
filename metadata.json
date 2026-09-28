@@ -1,0 +1,7 @@
+{
+  "name": "Feelings Wheel & AI Journal",
+  "description": "Interactive feelings wheel with AI-personalized journal prompts, mood history tracking, trends visualization, and biometric integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
