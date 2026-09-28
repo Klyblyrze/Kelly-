@@ -93,7 +93,7 @@ function apiEndpointsPlugin(): Plugin {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(() => {base:'kelly/kelly', 
   return {
     plugins: [react(), tailwindcss(), apiEndpointsPlugin()],
     resolve: {
