@@ -8,6 +8,7 @@ import {
   TaskProjectData,
   MindseraPersona,
   MindseraMindsComment,
+  SobrietyRecoveryContext,
 } from '../types/journal';
 import { SOMATIC_OPTIONS } from '../data/emotionsData';
 import { MINDSERA_FRAMEWORKS } from '../data/seedData';
@@ -33,6 +34,9 @@ import {
   ChevronUp,
   AlertCircle,
   Volume2,
+  ShieldCheck,
+  Flame,
+  Coffee,
 } from 'lucide-react';
 
 interface JournalEditorModalProps {
@@ -45,6 +49,7 @@ interface JournalEditorModalProps {
   mindsara: MindsaraContext;
   samsungHealth?: SamsungHealthData;
   tasks?: TaskProjectData;
+  sobriety?: SobrietyRecoveryContext;
 }
 
 export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
@@ -57,6 +62,7 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
   mindsara,
   samsungHealth,
   tasks,
+  sobriety,
 }) => {
   const [promptText, setPromptText] = useState(initialPrompt);
   const [journalContent, setJournalContent] = useState('');
@@ -87,6 +93,18 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
   const [attachSamsungHealth, setAttachSamsungHealth] = useState(true);
   const [attachTasks, setAttachTasks] = useState(true);
   const [attachMindsara, setAttachMindsara] = useState(true);
+  const [attachSobriety, setAttachSobriety] = useState(true);
+
+  // Sobriety & Recovery Overlay State
+  const [recoveryCravingLevel, setRecoveryCravingLevel] = useState<number>(sobriety?.currentCravingLevel ?? 2);
+  const [recoveryHalt, setRecoveryHalt] = useState({
+    hungry: sobriety?.haltState?.hungry ?? false,
+    angry: sobriety?.haltState?.angry ?? false,
+    lonely: sobriety?.haltState?.lonely ?? false,
+    tired: sobriety?.haltState?.tired ?? false,
+  });
+  const [recoveryUrgeSurfed, setRecoveryUrgeSurfed] = useState(false);
+  const [recoveryReframe, setRecoveryReframe] = useState('');
 
   // Mindsera Minds Comments & Custom Frameworks State
   const [reflectionTab, setReflectionTab] = useState<'mindsera' | 'compassionate'>('mindsera');
@@ -397,6 +415,18 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
                 sprintPressure: tasks.currentSprintPressure,
                 pendingTasks: tasks.pendingHighPriorityTasks,
                 activeProject: tasks.activeProjects[0],
+              }
+            : undefined,
+        recoverySnapshot:
+          attachSobriety && sobriety?.enabled
+            ? {
+                daysSober: sobriety.currentStreakDays,
+                cravingLevel: recoveryCravingLevel,
+                haltTriggers: (['hungry', 'angry', 'lonely', 'tired'] as const)
+                  .filter((k) => recoveryHalt[k])
+                  .map((k) => (k.charAt(0).toUpperCase() + k.slice(1)) as any),
+                urgeSurfed: recoveryUrgeSurfed,
+                reframedThought: recoveryReframe.trim() || undefined,
               }
             : undefined,
         mindsaraThemesReferenced:
@@ -836,6 +866,107 @@ export const JournalEditorModal: React.FC<JournalEditorModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* ========================================================================= */}
+          {/* SOBRIETY & ADDICTION RECOVERY CHECK-IN SECTION */}
+          {/* ========================================================================= */}
+          {sobriety?.enabled && (
+            <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
+                    <ShieldCheck className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-emerald-950 block">
+                      Sobriety & Addiction Treatment Check-in
+                    </span>
+                    <span className="text-[10px] text-emerald-700">
+                      Day {sobriety.currentStreakDays} Alcohol-Free • {sobriety.treatmentApproach}
+                    </span>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-1.5 text-xs text-emerald-900 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={attachSobriety}
+                    onChange={(e) => setAttachSobriety(e.target.checked)}
+                    className="rounded text-emerald-600 accent-emerald-600"
+                  />
+                  <span>Attach to Entry</span>
+                </label>
+              </div>
+
+              {attachSobriety && (
+                <div className="pt-2 border-t border-emerald-200/60 space-y-3 text-xs">
+                  {/* Craving Slider */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-emerald-900">
+                      <span>Alcohol Craving Intensity</span>
+                      <span className="text-xs font-extrabold text-emerald-950">{recoveryCravingLevel} / 10</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      value={recoveryCravingLevel}
+                      onChange={(e) => setRecoveryCravingLevel(parseInt(e.target.value, 10))}
+                      className="w-full accent-emerald-600 cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[9px] text-emerald-700">
+                      <span>0 (None)</span>
+                      <span>5 (Moderate Urge)</span>
+                      <span>10 (Acute Wave)</span>
+                    </div>
+                  </div>
+
+                  {/* HALT Triggers Checklist */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                      HALT Triggers Present Right Now:
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {[
+                        { key: 'hungry' as const, label: '🥪 Hungry' },
+                        { key: 'angry' as const, label: '⚡ Angry' },
+                        { key: 'lonely' as const, label: '🫂 Lonely' },
+                        { key: 'tired' as const, label: '💤 Tired' },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() =>
+                            setRecoveryHalt((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
+                          }
+                          className={`py-1 px-2 rounded-lg text-[11px] font-semibold border transition-all text-center ${
+                            recoveryHalt[item.key]
+                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs font-bold'
+                              : 'bg-white/80 text-emerald-900 border-emerald-200 hover:bg-white'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Urge Surfed toggle */}
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-[11px] font-medium text-emerald-950">
+                      <input
+                        type="checkbox"
+                        checked={recoveryUrgeSurfed}
+                        onChange={(e) => setRecoveryUrgeSurfed(e.target.checked)}
+                        className="rounded text-emerald-600 accent-emerald-600"
+                      />
+                      <span>I successfully surfed an urge wave during this reflection</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ========================================================================= */}
           {/* INTEGRATION DATA OVERLAY OPTIONS SECTION */}

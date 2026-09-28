@@ -219,6 +219,15 @@ export interface MoodEntry {
     pendingTasks?: number;
     activeProject?: string;
   };
+  // Sobriety & Addiction Treatment Snapshot
+  recoverySnapshot?: {
+    daysSober?: number;
+    cravingLevel?: number; // 0 to 10
+    haltTriggers?: ('Hungry' | 'Angry' | 'Lonely' | 'Tired')[];
+    urgeSurfed?: boolean;
+    reframedThought?: string;
+    supportContactReached?: boolean;
+  };
   // Mindsera Reconciliation Layer
   mindseraLinkedEntryId?: string;
   mindseraMindsComments?: MindseraMindsComment[];
@@ -227,9 +236,67 @@ export interface MoodEntry {
   mindseraThemesReferenced?: string[];
 }
 
+// ==========================================
+// SOBRIETY & ALCOHOL ADDICTION TREATMENT DATA
+// ==========================================
+export type RecoveryTreatmentApproach =
+  | 'SMART Recovery'
+  | 'CBT Relapse Prevention'
+  | '12-Step / AA'
+  | 'Harm Reduction'
+  | 'Mindful Sobriety (This Naked Mind)';
+
+export interface HealthMilestoneProgress {
+  days: number;
+  title: string;
+  scientificImpact: string;
+  achieved: boolean;
+}
+
+export interface UrgeSurfingRecord {
+  id: string;
+  timestamp: string;
+  trigger: string;
+  peakCravingLevel: number; // 1-10
+  surfingDurationSeconds: number;
+  somaticFocusUsed: string;
+  outcome: 'Rode the wave successfully' | 'Urge faded with somatic reset' | 'Sought support';
+}
+
+export interface SobrietyRecoveryContext {
+  enabled: boolean;
+  sobrietyStartDate: string; // YYYY-MM-DD
+  currentStreakDays: number;
+  treatmentApproach: RecoveryTreatmentApproach;
+  currentCravingLevel: number; // 0 to 10
+  haltState: {
+    hungry: boolean;
+    angry: boolean;
+    lonely: boolean;
+    tired: boolean;
+  };
+  triggersIdentified: string[];
+  copingToolbox: string[];
+  alcoholAvoidedUnits: number; // Standard drinks (e.g. 14g pure alcohol)
+  moneySavedEstimated: number; // In dollars
+  healthMilestones: HealthMilestoneProgress[];
+  urgeSurfingHistory: UrgeSurfingRecord[];
+  emergencySupportContacts: {
+    name: string;
+    phoneOrUrl: string;
+    role: string;
+  }[];
+  lastCheckInTimestamp: string;
+}
+
 export interface GeneratedPrompt {
   id: string;
-  category: 'Deep Reflection' | 'Somatic & Grounding' | 'Cognitive Shift' | 'Creative & Forward';
+  category:
+    | 'Deep Reflection'
+    | 'Somatic & Grounding'
+    | 'Cognitive Shift'
+    | 'Creative & Forward'
+    | 'Sobriety & Relapse Prevention';
   prompt: string;
   rationale?: string;
 }

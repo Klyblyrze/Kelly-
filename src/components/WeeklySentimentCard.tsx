@@ -16,17 +16,20 @@ import {
   ArrowRight,
   Activity,
   Heart,
+  Compass,
 } from 'lucide-react';
 
 interface WeeklySentimentCardProps {
   entries: MoodEntry[];
   onViewFullHistory: () => void;
+  onNavigateToPredictive?: () => void;
   onOpenJournalModal?: () => void;
 }
 
 export const WeeklySentimentCard: React.FC<WeeklySentimentCardProps> = ({
   entries,
   onViewFullHistory,
+  onNavigateToPredictive,
   onOpenJournalModal,
 }) => {
   // Compute data for the last 7 days (Day -6 to Day 0)
@@ -250,6 +253,38 @@ export const WeeklySentimentCard: React.FC<WeeklySentimentCardProps> = ({
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* AI Predictive Forecast Quick Callout */}
+          {onNavigateToPredictive && (
+            <div
+              onClick={onNavigateToPredictive}
+              className="mt-3 p-3 rounded-xl bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white cursor-pointer hover:ring-2 hover:ring-indigo-400/50 transition-all flex items-center justify-between gap-3 shadow-xs group"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="p-1 rounded-lg bg-indigo-500/30 text-indigo-300">
+                  <Compass className="w-4 h-4 text-indigo-400 group-hover:rotate-45 transition-transform" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+                      AI Predictive Trajectory
+                    </span>
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                      78% Resilience
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-white line-clamp-1">
+                    Midweek Sprint Peak with Weekend Decompression Window
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 text-xs font-bold text-indigo-300 group-hover:text-white shrink-0">
+                <span>View Forecast</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Wind, Play, Pause, RotateCcw, X, HeartPulse } from 'lucide-react';
+import { Wind, Play, Pause, RotateCcw, X, HeartPulse, Flame, ShieldCheck } from 'lucide-react';
 
 export const SomaticGroundingBar: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
+  const [mode, setMode] = useState<'vagal' | 'urge_surf'>('urge_surf');
   const [phase, setPhase] = useState<'Inhale' | 'Hold' | 'Exhale' | 'Rest'>('Inhale');
   const [countdown, setCountdown] = useState(4);
   const [isOpen, setIsOpen] = useState(false);
@@ -17,13 +18,13 @@ export const SomaticGroundingBar: React.FC = () => {
         // Advance phase
         if (phase === 'Inhale') {
           setPhase('Hold');
-          return 4;
+          return mode === 'urge_surf' ? 3 : 4;
         } else if (phase === 'Hold') {
           setPhase('Exhale');
-          return 6; // slightly longer exhale for parasympathetic activation
+          return mode === 'urge_surf' ? 7 : 6; // slow exhale to surf craving wave
         } else if (phase === 'Exhale') {
           setPhase('Rest');
-          return 2;
+          return mode === 'urge_surf' ? 3 : 2;
         } else {
           setPhase('Inhale');
           return 4;
@@ -32,26 +33,51 @@ export const SomaticGroundingBar: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isActive, phase]);
+  }, [isActive, phase, mode]);
 
   if (!isOpen) {
     return (
-      <div className="fixed bottom-6 right-6 z-30">
+      <div className="fixed bottom-6 right-6 z-30 flex items-center gap-2">
         <button
           onClick={() => {
+            setMode('urge_surf');
             setIsOpen(true);
             setIsActive(true);
           }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-800 transition-all text-xs font-semibold hover:scale-105"
+          className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-emerald-900 text-white shadow-xl hover:bg-emerald-800 transition-all text-xs font-bold hover:scale-105 border border-emerald-500/40"
+          title="Surf an alcohol craving wave"
+        >
+          <Flame className="w-4 h-4 text-emerald-400" />
+          <span>Urge Surfing</span>
+        </button>
+        <button
+          onClick={() => {
+            setMode('vagal');
+            setIsOpen(true);
+            setIsActive(true);
+          }}
+          className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-800 transition-all text-xs font-semibold hover:scale-105"
         >
           <Wind className="w-4 h-4 text-cyan-400" />
-          <span>Somatic Breathing Reset</span>
+          <span className="hidden sm:inline">Vagal Reset</span>
         </button>
       </div>
     );
   }
 
   const getPhaseInstruction = () => {
+    if (mode === 'urge_surf') {
+      switch (phase) {
+        case 'Inhale':
+          return 'Breathe cool air into the craving knot...';
+        case 'Hold':
+          return 'Observe the urge sensation without judging...';
+        case 'Exhale':
+          return 'Slow sigh out... the craving wave peaks & fades...';
+        case 'Rest':
+          return 'Notice self-control returning...';
+      }
+    }
     switch (phase) {
       case 'Inhale':
         return 'Breathe in gently through the nose...';
@@ -65,12 +91,16 @@ export const SomaticGroundingBar: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-30 bg-white rounded-3xl p-5 shadow-2xl border border-slate-200/90 w-80 animate-in fade-in slide-in-from-bottom-5">
+    <div className="fixed bottom-6 right-6 z-30 bg-white rounded-3xl p-5 shadow-2xl border border-slate-200/90 w-84 animate-in fade-in slide-in-from-bottom-5">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <Wind className="w-4 h-4 text-cyan-500" />
+          {mode === 'urge_surf' ? (
+            <Flame className="w-4 h-4 text-emerald-500" />
+          ) : (
+            <Wind className="w-4 h-4 text-cyan-500" />
+          )}
           <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-            Physiological Reset
+            {mode === 'urge_surf' ? 'Urge Surfing Protocol' : 'Vagal Physiological Reset'}
           </h4>
         </div>
         <button
@@ -84,12 +114,48 @@ export const SomaticGroundingBar: React.FC = () => {
         </button>
       </div>
 
-      <div className="py-6 flex flex-col items-center justify-center space-y-4">
+      {/* Mode Switcher */}
+      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl mt-2 text-[11px] font-semibold">
+        <button
+          onClick={() => {
+            setMode('urge_surf');
+            setPhase('Inhale');
+            setCountdown(4);
+          }}
+          className={`flex-1 py-1 rounded-lg transition-all ${
+            mode === 'urge_surf' ? 'bg-emerald-600 text-white font-bold shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          🌊 Urge Surfing
+        </button>
+        <button
+          onClick={() => {
+            setMode('vagal');
+            setPhase('Inhale');
+            setCountdown(4);
+          }}
+          className={`flex-1 py-1 rounded-lg transition-all ${
+            mode === 'vagal' ? 'bg-slate-900 text-white font-bold shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          🌬️ Vagal 4-7-8
+        </button>
+      </div>
+
+      <div className="py-5 flex flex-col items-center justify-center space-y-4">
         {/* Animated Breathing Circle */}
         <div className="relative flex items-center justify-center w-28 h-28">
           <div
             className={`absolute inset-0 rounded-full transition-all duration-1000 ${
-              phase === 'Inhale'
+              mode === 'urge_surf'
+                ? phase === 'Inhale'
+                  ? 'scale-115 bg-teal-100 border-2 border-teal-400'
+                  : phase === 'Hold'
+                  ? 'scale-115 bg-emerald-100 border-2 border-emerald-500'
+                  : phase === 'Exhale'
+                  ? 'scale-75 bg-amber-100 border-2 border-amber-400'
+                  : 'scale-75 bg-slate-100 border-2 border-slate-300'
+                : phase === 'Inhale'
                 ? 'scale-110 bg-cyan-100 border-2 border-cyan-400'
                 : phase === 'Hold'
                 ? 'scale-110 bg-indigo-100 border-2 border-indigo-400'
@@ -108,7 +174,7 @@ export const SomaticGroundingBar: React.FC = () => {
           </div>
         </div>
 
-        <p className="text-xs text-center text-slate-600 h-6">
+        <p className="text-xs text-center text-slate-600 h-8 px-2 leading-tight">
           {getPhaseInstruction()}
         </p>
       </div>
@@ -134,3 +200,4 @@ export const SomaticGroundingBar: React.FC = () => {
     </div>
   );
 };
+

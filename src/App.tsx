@@ -56,8 +56,8 @@ export default function App() {
   const [aiCoWork, setAiCoWork] = useState<AiCoWorkData>(loadStoredAiCoWork);
   const [geminiSpark, setGeminiSpark] = useState<GeminiSparkData>(loadStoredGeminiSpark);
 
-  // Active view: 'wheel' | 'history' | 'patterns' | 'holistic'
-  const [activeView, setActiveView] = useState<'wheel' | 'history' | 'patterns' | 'holistic'>('wheel');
+  // Active view: 'wheel' | 'history' | 'patterns' | 'predictive' | 'holistic'
+  const [activeView, setActiveView] = useState<'wheel' | 'history' | 'patterns' | 'predictive' | 'holistic'>('wheel');
 
   const [selectedEmotion, setSelectedEmotion] = useState<EmotionSelection | null>(() => {
     const peacefulNode = EMOTIONS_DATA[0].children?.[0].children?.[0] || EMOTIONS_DATA[0];
@@ -300,6 +300,7 @@ export default function App() {
             <WeeklySentimentCard
               entries={entries}
               onViewFullHistory={() => setActiveView('history')}
+              onNavigateToPredictive={() => setActiveView('predictive')}
             />
 
             {/* Feelings Wheel Section */}
@@ -347,7 +348,28 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 3: PATTERN INSIGHTS & RHYTHMS */}
+        {/* VIEW 3: PREDICTIVE FORECAST SUITE */}
+        {activeView === 'predictive' && (
+          <div className="animate-in fade-in duration-300">
+            <PatternInsightsView
+              entries={entries}
+              welltory={welltory}
+              mindsara={mindsara}
+              samsungHealth={samsungHealth}
+              tasks={tasks}
+              aiCoWork={aiCoWork}
+              geminiSpark={geminiSpark}
+              initialTab="predictive"
+              onSelectPrompt={(promptText) => {
+                setActiveJournalPrompt(promptText);
+                setIsJournalModalOpen(true);
+              }}
+              onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+            />
+          </div>
+        )}
+
+        {/* VIEW 4: PATTERN INSIGHTS & SCATTER PLOT */}
         {activeView === 'patterns' && (
           <div className="animate-in fade-in duration-300">
             <PatternInsightsView
@@ -358,6 +380,7 @@ export default function App() {
               tasks={tasks}
               aiCoWork={aiCoWork}
               geminiSpark={geminiSpark}
+              initialTab="scatter"
               onSelectPrompt={(promptText) => {
                 setActiveJournalPrompt(promptText);
                 setIsJournalModalOpen(true);

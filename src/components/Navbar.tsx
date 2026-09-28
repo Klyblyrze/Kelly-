@@ -10,23 +10,26 @@ import {
   Activity,
   Layers,
   ShieldCheck,
+  Compass,
 } from 'lucide-react';
 import {
   WelltoryBiometrics,
-  MindseraContext,
+  MindsaraContext,
   SamsungHealthData,
   TaskProjectData,
+  SobrietyRecoveryContext,
 } from '../types/journal';
 
 interface NavbarProps {
-  activeView: 'wheel' | 'history' | 'patterns' | 'holistic';
-  onChangeView: (view: 'wheel' | 'history' | 'patterns' | 'holistic') => void;
+  activeView: 'wheel' | 'history' | 'patterns' | 'predictive' | 'recovery' | 'holistic';
+  onChangeView: (view: 'wheel' | 'history' | 'patterns' | 'predictive' | 'recovery' | 'holistic') => void;
   onOpenCheckIn: () => void;
   onOpenIntegrations: () => void;
   welltory: WelltoryBiometrics;
-  mindsara: MindseraContext;
+  mindsara: MindsaraContext;
   samsungHealth: SamsungHealthData;
   tasks: TaskProjectData;
+  sobriety?: SobrietyRecoveryContext;
   totalEntriesCount: number;
 }
 
@@ -39,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   mindsara,
   samsungHealth,
   tasks,
+  sobriety,
   totalEntriesCount,
 }) => {
   return (
@@ -107,15 +111,47 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
+            onClick={() => onChangeView('predictive')}
+            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeView === 'predictive'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-xs font-bold ring-1 ring-white/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Predictive Forecast</span>
+            <span className="hidden sm:inline text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 font-mono font-bold">
+              AI
+            </span>
+          </button>
+
+          <button
             onClick={() => onChangeView('patterns')}
             className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
               activeView === 'patterns'
-                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60'
+                ? 'bg-slate-800 text-slate-100 shadow-xs border border-slate-700/60 font-bold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Brain className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Pattern Insights</span>
+            <span>Pattern & Scatter</span>
+          </button>
+
+          <button
+            onClick={() => onChangeView('recovery')}
+            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeView === 'recovery'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs font-bold ring-1 ring-white/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Sobriety</span>
+            {sobriety?.enabled && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 font-mono font-bold">
+                Day {sobriety.currentStreakDays}
+              </span>
+            )}
           </button>
 
           <button
@@ -133,6 +169,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Actions: Integrations & Quick Check-In */}
         <div className="flex items-center gap-2">
+          {/* Sobriety Quick Badge */}
+          {sobriety?.enabled && (
+            <button
+              onClick={() => onChangeView('recovery')}
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-900/80 transition-colors shadow-2xs"
+              title={`Sobriety Hub • Day ${sobriety.currentStreakDays} Alcohol-Free (${sobriety.treatmentApproach})`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Day {sobriety.currentStreakDays} Sober</span>
+            </button>
+          )}
           {/* Integrations Toggle */}
           <button
             onClick={onOpenIntegrations}

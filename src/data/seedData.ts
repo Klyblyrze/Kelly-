@@ -13,6 +13,7 @@ import {
   TickTickDayRecord,
   AiCoWorkData,
   GeminiSparkData,
+  SobrietyRecoveryContext,
 } from '../types/journal';
 
 // ============================================================================
@@ -558,6 +559,133 @@ export const INITIAL_GEMINI_SPARK: GeminiSparkData = {
 };
 
 // ============================================================================
+// SOBRIETY & ALCOHOL ADDICTION TREATMENT INITIAL STATE
+// ============================================================================
+export const INITIAL_SOBRIETY_RECOVERY: SobrietyRecoveryContext = {
+  enabled: true,
+  sobrietyStartDate: '2026-08-15',
+  currentStreakDays: 43,
+  treatmentApproach: 'SMART Recovery',
+  currentCravingLevel: 2,
+  haltState: {
+    hungry: false,
+    angry: false,
+    lonely: false,
+    tired: true,
+  },
+  triggersIdentified: [
+    'Friday 5 PM Transition (Decompression urge after high-pressure work)',
+    'Sprint Deadlines & Cognitive Exhaustion (Reaching for alcohol as a sedative)',
+    'Social Dinners & Celebrations with Alcohol Present',
+    'Unprocessed Interpersonal Resentment / Irritability',
+    'Euphoric Recall (Romancing the fantasy of "just one glass")',
+  ],
+  copingToolbox: [
+    'Urge Surfing (3-Minute guided wave-riding breathing)',
+    'HALT Assessment (Eat complex carbs, hydrate, physiological sigh)',
+    'Cold Water Facial Immersion (Triggers Mammalian Dive Reflex in 60s)',
+    '15-Minute Sensory Micro-Walk in Optic Flow',
+    'Calling Recovery Partner or Attending SMART Recovery Meeting',
+    'Artisanal Bitters with Ice-Cold Mineral Water',
+  ],
+  alcoholAvoidedUnits: 172, // standard units (e.g. 4 drinks/day * 43 days)
+  moneySavedEstimated: 860, // $20/day * 43 days
+  healthMilestones: [
+    {
+      days: 1,
+      title: 'Acute Toxicity Cleared',
+      scientificImpact: 'Blood alcohol zeroed, acute autonomic tremors settled, hydration recovering.',
+      achieved: true,
+    },
+    {
+      days: 3,
+      title: 'Restorative Sleep Stage Return',
+      scientificImpact: 'Nighttime sweat surges dissipate; liver glycogen stores replenish.',
+      achieved: true,
+    },
+    {
+      days: 7,
+      title: 'REM Sleep & Circadian Rebound',
+      scientificImpact: 'REM cycles double in duration; morning autonomic resting HR begins dropping ~6-10 bpm.',
+      achieved: true,
+    },
+    {
+      days: 14,
+      title: 'Autonomic HRV Rebound & Gut Lining Calming',
+      scientificImpact: 'Vagal nerve tone strengthens; digestive inflammation subsides; acid reflux disappears.',
+      achieved: true,
+    },
+    {
+      days: 30,
+      title: 'GABA & Dopamine Baseline Re-Sensitization',
+      scientificImpact: 'Liver enzymes (ALT/AST) normalize; prefrontal impulse regulation strengthens significantly.',
+      achieved: true,
+    },
+    {
+      days: 60,
+      title: 'Prefrontal Cortical Volume Restoration',
+      scientificImpact: 'Urge frequency drops by 70%; emotional self-regulation and executive control stabilize.',
+      achieved: false,
+    },
+    {
+      days: 90,
+      title: 'High Autonomic Allostatic Resilience',
+      scientificImpact: 'Neural reward pathways re-wire away from substance dependence; sustained sleep resilience.',
+      achieved: false,
+    },
+    {
+      days: 365,
+      title: 'Complete Neurobiological Re-Architecting',
+      scientificImpact: 'Cardiovascular disease risk plummets 50%; lasting psychological transformation.',
+      achieved: false,
+    },
+  ],
+  urgeSurfingHistory: [
+    {
+      id: 'us-1',
+      timestamp: new Date(Date.now() - 2 * 86400000).toISOString(),
+      trigger: 'Post-presentation adrenaline crash at 5:30 PM',
+      peakCravingLevel: 7,
+      surfingDurationSeconds: 180,
+      somaticFocusUsed: 'Jaw relaxation, diaphragm expansion, cold water drink',
+      outcome: 'Rode the wave successfully',
+    },
+    {
+      id: 'us-2',
+      timestamp: new Date(Date.now() - 6 * 86400000).toISOString(),
+      trigger: 'Dinner with colleagues where wine was ordered',
+      peakCravingLevel: 5,
+      surfingDurationSeconds: 120,
+      somaticFocusUsed: 'Ordered sparkling water with lime; tactile sensory anchor',
+      outcome: 'Rode the wave successfully',
+    },
+  ],
+  emergencySupportContacts: [
+    {
+      name: '988 Suicide & Crisis Lifeline',
+      phoneOrUrl: 'Call or Text 988',
+      role: '24/7 Free, Confidential National Lifeline',
+    },
+    {
+      name: 'SAMHSA National Helpline',
+      phoneOrUrl: '1-800-662-4357',
+      role: 'Substance Abuse & Mental Health Services (24/7)',
+    },
+    {
+      name: 'SMART Recovery Online Meetings',
+      phoneOrUrl: 'https://meetings.smartrecovery.org',
+      role: 'Science-Based Addiction Support Community',
+    },
+    {
+      name: 'Alex (Recovery Support Partner)',
+      phoneOrUrl: '555-0192',
+      role: 'Designated Sponsor / Accountability Partner',
+    },
+  ],
+  lastCheckInTimestamp: new Date().toISOString(),
+};
+
+// ============================================================================
 // SEED MOOD ENTRIES (FEELINGS WHEEL & RECONCILED DATA)
 // ============================================================================
 export const SEED_MOOD_ENTRIES: MoodEntry[] = [
@@ -878,6 +1006,7 @@ const STORAGE_KEYS = {
   TASK_PROJECTS: 'feelings_wheel_task_projects_v2',
   AI_COWORK: 'feelings_wheel_ai_cowork_v2',
   GEMINI_SPARK: 'feelings_wheel_gemini_spark_v2',
+  SOBRIETY: 'feelings_wheel_sobriety_recovery_v2',
 };
 
 export function loadStoredEntries(): MoodEntry[] {
@@ -1009,5 +1138,23 @@ export function saveStoredGeminiSpark(data: GeminiSparkData): void {
     localStorage.setItem(STORAGE_KEYS.GEMINI_SPARK, JSON.stringify(data));
   } catch (err) {
     console.warn('Notice saving Gemini Spark data', err);
+  }
+}
+
+export function loadStoredSobriety(): SobrietyRecoveryContext {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SOBRIETY);
+    if (!raw) return INITIAL_SOBRIETY_RECOVERY;
+    return { ...INITIAL_SOBRIETY_RECOVERY, ...JSON.parse(raw) };
+  } catch {
+    return INITIAL_SOBRIETY_RECOVERY;
+  }
+}
+
+export function saveStoredSobriety(data: SobrietyRecoveryContext): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SOBRIETY, JSON.stringify(data));
+  } catch (err) {
+    console.warn('Notice saving Sobriety Recovery data', err);
   }
 }
